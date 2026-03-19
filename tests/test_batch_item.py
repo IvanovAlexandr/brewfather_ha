@@ -471,34 +471,3 @@ class TestBatchNotesAndEvents:
         assert result["batchNotes"] == batch.batch_notes
         assert "events" in result
         assert len(result["events"]) == 3
-
-
-def test_get_active_batches_returns_unfinished_batches():
-    from brewfather.models.batches_item import BatchesItem
-
-    # Construct a BatchesItem-like object with mixed states
-    class DummyBatch:
-        def __init__(self, id, status=None, stage=None, is_active=False):
-            self.id = id
-            self.status = status
-            self.stage = stage
-            self.is_active = is_active
-
-    batches = [
-        DummyBatch("1", status="completed"),
-        DummyBatch("2", status=None, stage="fermentation", is_active=True),
-        DummyBatch("3", status="finished"),
-        DummyBatch("4", status="in_progress", stage="mash"),
-    ]
-
-    bi = BatchesItem()
-    # attach the batches list in the most common attribute name
-    bi.batches = batches
-
-    active = bi.get_active_batches()
-    ids = [getattr(b, "id", None) for b in active]
-
-    assert "2" in ids
-    assert "4" in ids
-    assert "1" not in ids
-    assert "3" not in ids

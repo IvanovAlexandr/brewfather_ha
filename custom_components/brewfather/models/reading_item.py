@@ -113,22 +113,6 @@ class Reading:
             result["comment"] = from_union([from_str, from_none], self.comment)
         return result
 
-    def get_reading_dict(self):
-        try:
-            d = {}
-            for k, v in self.__dict__.items():
-                try:
-                    d[k] = v
-                except Exception:
-                    d[k] = None
-            return d
-        except Exception:
-            # Best effort fallback
-            try:
-                return dict(self)
-            except Exception:
-                return {}
-
 
 def readings_from_dict(s: Any) -> List[Reading]:
     return from_list(Reading.from_dict, s)
