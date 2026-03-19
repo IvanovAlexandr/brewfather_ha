@@ -109,6 +109,80 @@ class BatchesItemElement:
         )
         return result
 
+    def get_active_batches(self):
+        """Return a list of active/current batches across any stage.
+
+        The selection prefers explicitly active/current batches, then batches
+        whose stage matches common active stages, and finally any batch not
+        marked as completed/finished/terminated/cancelled.
+        """
+        batches = getattr(self, "batches", None) or getattr(self, "items", None) or []
+        try:
+            iterator = list(batches)
+        except Exception:
+            iterator = batches or []
+
+        results = []
+
+        # 1) Explicit active/current flags
+        for batch in iterator:
+            try:
+                is_active = bool(getattr(batch, "is_active", False) or getattr(batch, "is_current", False))
+            except Exception:
+                try:
+                    is_active = bool(batch.get("is_active") or batch.get("is_current"))
+                except Exception:
+                    is_active = False
+            if is_active:
+                results.append(batch)
+
+        if results:
+            return results
+
+        # 2) Stage-based matches
+        active_stage_keywords = ("mash", "boil", "ferment", "fermentation", "conditioning", "packag", "bottle", "aged", "aging")
+        for batch in iterator:
+            stage = None
+            try:
+                stage = getattr(batch, "stage", None) or getattr(batch, "stage_name", None)
+            except Exception:
+                try:
+                    stage = batch.get("stage") or batch.get("stage_name")
+                except Exception:
+                    stage = None
+            if stage and any(k in str(stage).lower() for k in active_stage_keywords):
+                results.append(batch)
+
+        if results:
+            return results
+
+        # 3) Any not finished
+        finished_states = ("completed", "finished", "terminated", "cancelled", "canceled")
+        for batch in iterator:
+            status = None
+            try:
+                status = getattr(batch, "status", None) or getattr(batch, "state", None)
+            except Exception:
+                try:
+                    status = batch.get("status") or batch.get("state")
+                except Exception:
+                    status = None
+            if not status or str(status).lower() not in finished_states:
+                results.append(batch)
+
+        return results
+
+    def get_current_batch(self):
+        """Return the single most relevant active batch (first of active list)."""
+        active = self.get_active_batches()
+        return active[0] if active else None
+
+    # Backwards compatibility: if callers expect a fermentation-specific accessor,
+    # route it to the more generic implementation so the integration can return
+    # information in any stage.
+    def get_fermenting_batch(self):
+        return self.get_current_batch()
+
 
 def batches_item_from_dict(s: Any) -> List[BatchesItemElement]:
     return from_list(BatchesItemElement.from_dict, s)

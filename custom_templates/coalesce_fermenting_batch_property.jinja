@@ -1,7 +1,26 @@
-{% macro fermenting_batch_property(data_index, property) %}
-{% if state_attr('sensor.brewfather_all_batches_data', 'data') | list | count > data_index %}
-{{state_attr('sensor.brewfather_all_batches_data', 'data')[data_index][property]}}
-{% else %}
-0
-{% endif %}
-{% endmacro %}
+{# Prefer coordinator-provided active_batches, then fall back to other batch lists. Return property from the first active batch for single-value use. #}
+{% macro coalesce_fermenting_batch_property(prop) -%}
+  {%- set candidate_batches = [] -%}
+  {# Try different known containers where active batches may be exposed #}
+  {%- if value_json is defined and value_json.active_batches is defined -%}
+    {%- set candidate_batches = value_json.active_batches -%}
+  {%- elif value is defined and value.active_batches is defined -%}
+    {%- set candidate_batches = value.active_batches -%}
+  {%- elif value is defined and value.batches is defined -%}
+    {%- set candidate_batches = value.batches -%}
+  {%- elif batches is defined -%}
+    {%- set candidate_batches = batches -%}
+  {%- endif -%}
+
+  {%- if candidate_batches is iterable and candidate_batches|length > 0 -%}
+    {%- set first = candidate_batches[0] -%}
+    {%- if first is mapping -%}
+      {{- (first[prop] if prop in first else first.get(prop) if first.get is defined else '') -}}
+    {%- else -%}
+      {# handle object-like batches with attributes #}
+      {{- (getattr(first, prop, '') ) -}}
+    {%- endif -%}
+  {%- else -%}
+    {{- "" -}}
+  {%- endif -%}
+{%- endmacro %}
