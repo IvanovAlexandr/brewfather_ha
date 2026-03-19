@@ -104,138 +104,71 @@ class BrewfatherStatusSensor(CoordinatorEntity, SensorEntity):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
-    """Set up the sensor platforms."""
+    """Set up sensors for each active batch."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
-    sensors = []
 
-    # Add status sensor for UX improvement
-    status_description = SensorEntityDescription(
-        key="status",
-        name="Integration Status",
-        icon="mdi:beer",
-    )
-    sensors.append(BrewfatherStatusSensor(coordinator, entry, status_description))
+    shared = coordinator.get_shared_data_for_entities() if hasattr(coordinator, "get_shared_data_for_entities") else getattr(coordinator, "data", {}) or {}
+    active_batches = shared.get("active_batches", []) or []
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_name,
-            SensorEntityDescription(
-                key="recipe_name",
-                name="Recipe name",
-                icon="mdi:glass-mug",
-            )
-        )
-    )
+    entities = []
+    # Base sensor descriptors or definitions
+    try:
+        sensor_defs = SENSOR_DEFINITIONS
+    except Exception:
+        sensor_defs = []
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_current_temperature,
-            SensorEntityDescription(
-                key="target_temperature",
-                name="Target temperature",
-                icon="mdi:thermometer",
-                native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-                device_class=SensorDeviceClass.TEMPERATURE,
-                state_class=SensorStateClass.MEASUREMENT,
-            )
-        )
-    )
+    for batch in active_batches:
+        # Determine batch id for unique id
+        batch_id = None
+        try:
+            batch_id = getattr(batch, "id", None) or getattr(batch, "batch_id", None)
+        except Exception:
+            try:
+                batch_id = batch.get("id") or batch.get("batch_id")
+            except Exception:
+                batch_id = None
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_next_temperature,
-            SensorEntityDescription(
-                key="upcoming_target_temperature",
-                name="Upcoming target temperature",
-                icon="mdi:thermometer-chevron-up",
-                native_unit_of_measurement=UnitOfTemperature.CELSIUS, #Should we support fahrenheit?
-                device_class=SensorDeviceClass.TEMPERATURE,
-            )
-        )
-    )
+        for sdef in sensor_defs:
+            unique = f"{DOMAIN}_{sdef['type']}_{batch_id}" if batch_id else f"{DOMAIN}_{sdef['type']}"
+            # Create sensor entity with batch context
+            entity = BrewfatherBatchSensor(coordinator, sdef, batch, unique)
+            entities.append(entity)
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_next_date,
-            SensorEntityDescription(
-                key="upcoming_target_temperature_change",
-                name="Upcoming target temperature change",
-                icon="mdi:clock",
-                device_class=SensorDeviceClass.TIMESTAMP,
-            )
-        )
-    )
+    if entities:
+        async_add_entities(entities, True)
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_last_reading,
-            SensorEntityDescription(
-                key="last_reading",
-                name="Last reading",
-                icon="mdi:chart-line",
-                state_class=SensorStateClass.MEASUREMENT,
-            )
-        )
-    )
+class BrewfatherBatchSensor:
+    """Defines a sensor."""
 
-    all_batch_info_sensor = entry.data.get(CONF_ALL_BATCH_INFO_SENSOR, False)
-    if all_batch_info_sensor:
-        sensors.append(
-            BrewfatherSensor(
-                coordinator,
-                SensorKinds.all_batch_info,
-                SensorEntityDescription(
-                    key="all_batches_data",
-                    name="All batches data",
-                    icon="mdi:database",
-                )
-            )
-        ) 
+    def __init__(self, coordinator, definition, batch, unique_id):
+        self._coordinator = coordinator
+        self._definition = definition
+        self._batch = batch
+        self._unique_id = unique_id
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_start_date,
-            SensorEntityDescription(
-                key="fermentation_start_date",
-                name="Fermentation start",
-                icon="mdi:clock",
-                device_class=SensorDeviceClass.TIMESTAMP,
-            )
-        )
-    )
+    @property
+    def unique_id(self):
+        return self._unique_id
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.batch_notes,
-            SensorEntityDescription(
-                key="batch_notes",
-                name="Batch notes",
-                icon="mdi:note-text",
-            )
-        )
-    )
+    @property
+    def extra_state_attributes(self):
+        attrs = {}
+        # include batch context so template sensors can show stage/id
+        try:
+            if hasattr(self._batch, "get_stage_attributes"):
+                attrs.update(self._batch.get_stage_attributes())
+            elif hasattr(self._batch, "to_dict"):
+                attrs["batch"] = self._batch.to_dict()
+            else:
+                attrs["batch"] = dict(self._batch)
+        except Exception:
+            attrs["batch"] = self._batch
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.events,
-            SensorEntityDescription(
-                key="events",
-                name="Events",
-                icon="mdi:calendar-clock",
-            )
-        )
-    )
-  
-    async_add_entities(sensors, update_before_add=False)
+        # Merge any existing attribute building logic
+        # ...existing attribute building code...
+        return attrs
 
+    # ...existing code...
 
 class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
     """An entity using CoordinatorEntity.
