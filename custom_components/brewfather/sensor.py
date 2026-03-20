@@ -115,7 +115,7 @@ class BrewfatherStatusSensor(CoordinatorEntity, SensorEntity):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
-    """Set up the sensor platforms."""
+    """Set up Brewfather sensors based on a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
     sensors = []
 
