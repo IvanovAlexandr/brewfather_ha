@@ -253,7 +253,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             
         return DeviceInfo(
             identifiers={(DOMAIN, self._batch_id)},
-            name=f"Brewfather Batch - {batch_name}", # 👈 ЗМІНА ТУТ: додали "Brewfather "
+            name=f"BF Batch - {batch_name}", # 👈 ЗМІНА ТУТ: додали "Brewfather "
             manufacturer="Brewfather",
             model="Brew Batch",
         )
