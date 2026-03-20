@@ -20,19 +20,6 @@ CONF_CUSTOM_STREAM_LOGGING_ID = "custom_stream_logging_id"
 CONF_CUSTOM_STREAM_TEMPERATURE_ENTITY_NAME = "custom_stream_temperature_entity_name"
 CONF_CUSTOM_STREAM_TEMPERATURE_ENTITY_ATTRIBUTE = "custom_stream_temperature_entity_attribute"
 CONF_CUSTOM_STREAM_GRAVITY_ENTITY_NAME = "custom_stream_gravity_entity_name"
-CONF_ENABLE_PLANNING = "enable_planning"
-CONF_ENABLE_BREWING = "enable_brewing"
-CONF_ENABLE_FERMENTING = "enable_fermenting"
-CONF_ENABLE_CONDITIONING = "enable_conditioning"
-CONF_ENABLE_COMPLETED = "enable_completed"
-CONF_ENABLE_ARCHIVED = "enable_archived"
-
-STATE_PLANNING = "Planning"
-STATE_BREWING = "Brewing"
-STATE_FERMENTING = "Fermenting"
-STATE_CONDITIONING = "Conditioning"
-STATE_COMPLETED = "Completed"
-STATE_ARCHIVED = "Archived"
 
 VERSION_MAJOR = 1
 VERSION_MINOR = 4
