@@ -163,8 +163,8 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
     def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> BrewfatherCoordinatorData | None:
         fermenting_start: int | None = None
         for note in currentBatch.batch.notes:
-            if note.status == "Fermenting":
-                fermenting_start = note.timestamp
+            # if note.status == "Fermenting":
+            fermenting_start = note.timestamp
         
         if fermenting_start is None:
             return None
