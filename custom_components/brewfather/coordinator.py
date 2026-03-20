@@ -84,28 +84,27 @@ class BatchInfo:
         self.batch = batch
         self.last_reading = last_reading
 
-class BrewfatherCoordinator(DataUpdateCoordinator):
-    """Brewfather coordinator."""
+class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
+    """Class to manage fetching data from the API."""
 
-    def __init__(
-        self, hass: HomeAssistant, connection: BrewfatherConnection, options: dict
-    ):
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(seconds=UPDATE_INTERVAL),
+    def __init__(self, hass: HomeAssistant, entry, update_interval: timedelta):
+        self.multi_batch_mode = entry.data.get(CONF_MULTI_BATCH, False)
+        self.all_batch_info_sensor = entry.data.get(CONF_ALL_BATCH_INFO_SENSOR, False)
+        self.temperature_correction_enabled = entry.data.get(CONF_RAMP_TEMP_CORRECTION, False)
+        self.connection = Connection(
+            entry.data.get(CONF_USERNAME), 
+            entry.data.get(CONF_PASSWORD)
         )
-        self.connection = connection
-        self.options = options
-        self.data = {}
-        # ... existing code ...
-        self.multi_batch_mode = options.get(CONF_MULTI_BATCH, False)
-        self.ramp_temp_correction = options.get(CONF_RAMP_TEMP_CORRECTION, False)
-        self.custom_stream_enabled = options.get(CONF_CUSTOM_STREAM_ENABLED, False)
-        self.custom_stream_logging_id = options.get(CONF_CUSTOM_STREAM_LOGGING_ID, "")
-        self.custom_stream_temperature_entity_name = options.get(CONF_CUSTOM_STREAM_TEMPERATURE_ENTITY_NAME, "")
-        self.custom_stream_gravity_entity_name = options.get(CONF_CUSTOM_STREAM_GRAVITY_ENTITY_NAME, "")
+        self.custom_stream_enabled = entry.data.get(CONF_CUSTOM_STREAM_ENABLED, False)
+        self.last_update_success_time: Optional[datetime] = None
+        if self.custom_stream_enabled:
+            self.custom_stream_logging_id = entry.data.get(CONF_CUSTOM_STREAM_LOGGING_ID, None)
+
+            self.custom_stream_temperature_entity_name = entry.data.get(CONF_CUSTOM_STREAM_TEMPERATURE_ENTITY_NAME, None)
+            
+            self.custom_stream_gravity_entity_name = entry.data.get(CONF_CUSTOM_STREAM_GRAVITY_ENTITY_NAME, None)
+
+        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
 
     async def _async_update_data(self) -> BrewfatherCoordinatorData:
         """Update data via library."""
