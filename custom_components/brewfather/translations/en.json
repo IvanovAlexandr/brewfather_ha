@@ -8,12 +8,16 @@
         "data": {
           "name": "Connection name",
           "username": "User ID",
-          "password": "API-Key"
+          "password": "API-Key",
+          "api_key": "API Key",
+          "user_key": "User Key"
         },
         "data_description": {
           "name": "A friendly name for this Brewfather connection in Home Assistant",
           "username": "Your Brewfather UserId (not email address)",
-          "password": "Your API key from Brewfather Settings > API"
+          "password": "Your API key from Brewfather Settings > API",
+          "api_key": "Your API key from Brewfather Settings > API",
+          "user_key": "Your User key from Brewfather Settings > API"
         }
       },
       "features": {
@@ -55,10 +59,12 @@
       "invalid_entity": "Selected entity is not valid or unavailable",
       "unsupported_temperature_unit": "Temperature sensor must use Celsius (\u00b0C), Fahrenheit (\u00b0F), or Kelvin (K)",
       "invalid_logging_id": "Invalid logging ID format",
-      "custom_stream_test_failed": "Connection test failed, please verify your settings"
+      "custom_stream_test_failed": "Connection test failed, please verify your settings",
+      "invalid_auth": "Invalid authentication"
     },
     "abort": {
-      "already_configured": "This Brewfather account is already configured"
+      "already_configured": "This Brewfather account is already configured",
+      "integration_already_configured": "Integration is already configured"
     }
   },
   "entity": {
@@ -77,13 +83,25 @@
           "ramp_temp_correction": "Enable temperature ramping",
           "multi_batch": "Multiple batch support",
           "all_batch_info_sensor": "All batches data sensor",
-          "custom_stream_enabled": "Enable custom stream"
+          "custom_stream_enabled": "Enable custom stream",
+          "enable_planning": "Enable Planning Batches",
+          "enable_brewing": "Enable Brewing Batches",
+          "enable_fermenting": "Enable Fermenting Batches",
+          "enable_conditioning": "Enable Conditioning Batches",
+          "enable_completed": "Enable Completed Batches",
+          "enable_archived": "Enable Archived Batches"
         },
         "data_description": {
           "ramp_temp_correction": "Automatically adjust target temperatures during fermentation steps with ramping schedules",
           "multi_batch": "Monitor and display data from multiple fermenting batches simultaneously",
           "all_batch_info_sensor": "Create an additional sensor containing detailed information about all batches",
-          "custom_stream_enabled": "Automatically send temperature readings from Home Assistant to Brewfather"
+          "custom_stream_enabled": "Automatically send temperature readings from Home Assistant to Brewfather",
+          "enable_planning": "Enable or disable planning batches feature",
+          "enable_brewing": "Enable or disable brewing batches feature",
+          "enable_fermenting": "Enable or disable fermenting batches feature",
+          "enable_conditioning": "Enable or disable conditioning batches feature",
+          "enable_completed": "Enable or disable completed batches feature",
+          "enable_archived": "Enable or disable archived batches feature"
         }
       },
       "custom_stream": {
@@ -108,5 +126,13 @@
       "unsupported_temperature_unit": "Entity must report temperature in Celsius (\u00b0C), Fahrenheit (\u00b0F), or Kelvin (K)",
       "unknown": "Something went wrong, please check the log files."
     }
+  },
+  "state": {
+    "planning": "Planning",
+    "brewing": "Brewing",
+    "fermenting": "Fermenting",
+    "conditioning": "Conditioning",
+    "completed": "Completed",
+    "archived": "Archived"
   }
 }

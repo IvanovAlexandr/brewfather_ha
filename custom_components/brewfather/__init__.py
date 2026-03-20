@@ -20,6 +20,7 @@ from .const import (
     CONF_CUSTOM_STREAM_TEMPERATURE_ENTITY_NAME,
     CONF_CUSTOM_STREAM_LOGGING_ID,
 )
+from .connection import BrewfatherConnection
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.CALENDAR]
@@ -28,7 +29,12 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry: config_entri
     # """Setup our skeleton component."""
 
     update_interval = timedelta(seconds=UPDATE_INTERVAL)
-    coordinator = BrewfatherCoordinator(hass, config_entry, update_interval)
+    user_key = config_entry.data["user_key"]
+    api_key = config_entry.data["api_key"]
+    options = config_entry.options
+
+    connection = BrewfatherConnection(hass.helpers.aiohttp_client.async_get_clientsession(), api_key, user_key, options)
+    coordinator = BrewfatherCoordinator(hass, connection, options)
 
     #Signal updates from options flow
     config_entry.async_on_unload(config_entry.add_update_listener(options_update_listener))

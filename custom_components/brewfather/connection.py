@@ -17,7 +17,19 @@ from .const import (
     READINGS_URI,
     DRY_RUN,
     LAST_READING_URI,
-    LOG_CUSTOM_STREAM
+    LOG_CUSTOM_STREAM,
+    STATE_PLANNING,
+    STATE_BREWING,
+    STATE_FERMENTING,
+    STATE_CONDITIONING,
+    STATE_COMPLETED,
+    STATE_ARCHIVED,
+    CONF_ENABLE_PLANNING,
+    CONF_ENABLE_BREWING,
+    CONF_ENABLE_FERMENTING,
+    CONF_ENABLE_CONDITIONING,
+    CONF_ENABLE_COMPLETED,
+    CONF_ENABLE_ARCHIVED,
 )
 from .testdata import (
     TESTDATA_BATCHES,
@@ -196,3 +208,50 @@ class InvalidCredentials(exceptions.HomeAssistantError):
 
 class InvalidScope(exceptions.HomeAssistantError):
     """Error to indicate api key doesn't have the correct scope, 403."""
+
+class BrewfatherConnection:
+    def __init__(self, session: aiohttp.ClientSession, api_key: str, user_key: str, options: dict):
+        self._session = session
+        self._api_key = api_key
+        self._user_key = user_key
+        self._options = options
+
+    async def get_batches(self):
+        statuses = []
+        if self._options.get(CONF_ENABLE_PLANNING, True):
+            statuses.append(STATE_PLANNING)
+        if self._options.get(CONF_ENABLE_BREWING, True):
+            statuses.append(STATE_BREWING)
+        if self._options.get(CONF_ENABLE_FERMENTING, True):
+            statuses.append(STATE_FERMENTING)
+        if self._options.get(CONF_ENABLE_CONDITIONING, True):
+            statuses.append(STATE_CONDITIONING)
+        if self._options.get(CONF_ENABLE_COMPLETED, False):
+            statuses.append(STATE_COMPLETED)
+        if self._options.get(CONF_ENABLE_ARCHIVED, False):
+            statuses.append(STATE_ARCHIVED)
+
+        params = {"status": statuses} if statuses else {}
+        async with self._session.get(BATCHES_URI, params=params, auth=aiohttp.BasicAuth(self._user_key, self._api_key)) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def get_batch(self, batch_id: str):
+        async with self._session.get(BATCH_URI.format(batch_id), auth=aiohttp.BasicAuth(self._user_key, self._api_key)) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def get_readings(self, batch_id: str):
+        async with self._session.get(READINGS_URI.format(batch_id), auth=aiohttp.BasicAuth(self._user_key, self._api_key)) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def get_last_reading(self, batch_id: str):
+        async with self._session.get(LAST_READING_URI.format(batch_id), auth=aiohttp.BasicAuth(self._user_key, self._api_key)) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def log_custom_stream(self, stream_id: str, data: dict):
+        async with self._session.post(LOG_CUSTOM_STREAM.format(stream_id), json=data) as resp:
+            resp.raise_for_status()
+            return await resp.json()
