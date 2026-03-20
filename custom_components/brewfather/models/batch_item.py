@@ -333,7 +333,7 @@ class BatchItem:
         events = parse_field(obj, "events", lambda x: from_union([lambda x: from_list(Event.from_dict, x), from_none], x), "BatchItem", errors)
         
         raise_if_errors(errors, "BatchItem")
-        return BatchItem(id, name, batch_no, status, brew_date, recipe, notes, measured_og, batch_notes, events)
+        return BatchItem(id, name, batch_no, status, brewer, brew_date, recipe, notes, measured_og, batch_notes, events)
 
     def to_dict(self) -> dict:
         result: dict = {}
