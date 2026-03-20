@@ -349,6 +349,19 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             if len(other_batches_data)  > 0:
                 custom_attributes["other_batches"] = other_batches_data
 
+        elif sensor_type == SensorKinds.brewer:
+            sensor_data.state = data.brewer
+            custom_attributes["batch_id"] = data.batch_id
+
+            other_batches_data = []
+            for other_batch_data in data.other_batches:
+                other_batches_data.append({
+                    "batch_id": other_batch_data.batch_id,
+                    "state": other_batch_data.brewer
+                })
+            if len(other_batches_data)  > 0:
+                custom_attributes["other_batches"] = other_batches_data
+
         elif sensor_type == SensorKinds.fermenting_current_temperature:
             sensor_data.state = data.current_step_temperature
             custom_attributes["batch_id"] = data.batch_id

@@ -37,6 +37,7 @@ def sort_by_actual_time(entity: Fermentation):
 class BrewfatherCoordinatorData:
     batch_id: Optional[str]
     brew_name: Optional[str]
+    brewer: Optional[str]
     current_step_temperature: Optional[float]
     next_step_date: Optional[datetime.datetime]
     next_step_temperature: Optional[float]
@@ -51,6 +52,7 @@ class BrewfatherCoordinatorData:
         # set defaults to None
         self.batch_id = None
         self.brew_name = None
+        self.brewer = None
         self.current_step_temperature = None
         self.next_step_date = None
         self.next_step_temperature = None
@@ -213,6 +215,7 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
         data = BrewfatherCoordinatorData()
         data.batch_id = currentBatch.batch.id
         data.brew_name = currentBatch.batch.recipe.name
+        data.brewer = currentBatch.batch.brewer
         data.last_reading = currentBatch.last_reading
         data.start_date = self.datetime_fromtimestamp(fermenting_start)
         data.batch_notes = currentBatch.batch.batch_notes
