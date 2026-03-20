@@ -32,7 +32,6 @@ from .connection import (
     InvalidCredentials,
     InvalidScope
 )
-from .options_flow import BrewfatherOptionsFlowHandler
 
 _LOGGER = logging.getLogger(__name__)
 
