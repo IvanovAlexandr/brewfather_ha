@@ -232,7 +232,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._attr_name = self._entity_description.name
         
         # Унікальний ідентифікатор тепер включає batch_id
-        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{self._entity_description.key}"
+        self._attr_unique_id = f"bf_{SENSOR_PREFIX}_{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
