@@ -390,6 +390,34 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
                 sensor_data.state = len(future_events)
                 custom_attributes["events"] = future_events
 
+        elif sensor_type == SensorKinds.status:
+            sensor_data.state = getattr(batch_data, "status", None)
+            
+            # Додаємо сирий JSON як атрибути, якщо він є
+            raw_dict = getattr(batch_data, "raw_data", None)
+            if isinstance(raw_dict, dict):
+                # Відфільтровуємо важкі списки, щоб не забивати базу Home Assistant
+                filtered_dict = {k: v for k, v in raw_dict.items() if k not in ["readings", "events", "notes"]} 
+                custom_attributes.update(filtered_dict)
+
+        elif sensor_type == SensorKinds.batch_no:
+            sensor_data.state = getattr(batch_data, "batch_no", None)
+
+        elif sensor_type == SensorKinds.brew_date:
+            brew_date_ts = getattr(batch_data, "brew_date", None)
+            if brew_date_ts:
+                # Brewfather віддає час у мілісекундах
+                sensor_data.state = datetime.fromtimestamp(brew_date_ts / 1000, timezone.utc)
+
+        elif sensor_type == SensorKinds.measured_og:
+            sensor_data.state = getattr(batch_data, "measured_og", None)
+
+        elif sensor_type == SensorKinds.measured_fg:
+            sensor_data.state = getattr(batch_data, "measured_fg", None)
+
+        elif sensor_type == SensorKinds.measured_abv:
+            sensor_data.state = getattr(batch_data, "measured_abv", None)
+
         sensor_data.extra_state_attributes = custom_attributes
 
         # Received a datetime processing
@@ -402,8 +430,6 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
                     value = value.astimezone(timezone.utc)
                 sensor_data.state = value.isoformat(timespec="seconds")
             except (AttributeError, TypeError) as err:
-                # If it's already a string from the API, we can safely ignore the cast error, 
-                # but log it if it's completely wrong.
                 pass
             
         return sensor_data
