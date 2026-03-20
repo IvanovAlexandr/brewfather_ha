@@ -90,7 +90,6 @@ class BrewfatherCoordinator(DataUpdateCoordinator):
     def __init__(
         self, hass: HomeAssistant, connection: BrewfatherConnection, options: dict
     ):
-        from .const import UPDATE_INTERVAL
         super().__init__(
             hass,
             _LOGGER,
