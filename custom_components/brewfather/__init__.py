@@ -5,7 +5,6 @@ from homeassistant import config_entries, core
 from datetime import timedelta
 from homeassistant.exceptions import ConfigEntryNotReady 
 from homeassistant.const import Platform, CONF_USERNAME, CONF_PASSWORD
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .coordinator import BrewfatherCoordinator
 from .const import (
@@ -34,7 +33,7 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry: config_entri
     api_key = config_entry.data[CONF_PASSWORD]
     options = config_entry.options
 
-    connection = BrewfatherConnection(async_get_clientsession(hass), api_key, user_key, options)
+    connection = BrewfatherConnection(hass.helpers.aiohttp_client.async_get_clientsession(), api_key, user_key, options)
     coordinator = BrewfatherCoordinator(hass, connection, options)
 
     #Signal updates from options flow
