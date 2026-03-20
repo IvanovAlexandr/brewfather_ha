@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 import enum
 import logging
 from typing import cast, Any
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.core import callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
@@ -107,29 +109,28 @@ async def async_setup_entry(
 ):
     """Set up the sensor platforms."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
-    sensors = []
-
-    # Додаємо загальний статус інтеграції
-    status_description = SensorEntityDescription(
-        key="status",
-        name="Integration Status",
-        icon="mdi:beer",
-    )
-    sensors.append(BrewfatherStatusSensor(coordinator, entry, status_description))
-
-    if not coordinator.data:
-        async_add_entities(sensors, update_before_add=False)
-        return
-
-    # Збираємо всі батчі в один список (основний + інші)
-    all_batches_to_process = []
-    if getattr(coordinator.data, "batch_id", None):
-        all_batches_to_process.append(coordinator.data)
     
-    if hasattr(coordinator.data, "other_batches") and coordinator.data.other_batches:
-        all_batches_to_process.extend(coordinator.data.other_batches)
+    # 1. Створюємо ГЛОБАЛЬНІ сенсори (статус інтеграції та загальне інфо).
+    # Вони створюються лише один раз під час ініціалізації.
+    static_sensors = []
+    status_description = SensorEntityDescription(
+        key="status", name="Integration Status", icon="mdi:beer"
+    )
+    static_sensors.append(BrewfatherStatusSensor(coordinator, entry, status_description))
 
-    # Описуємо всі типи сенсорів, які потрібно створити для кожного батча
+    if entry.data.get(CONF_ALL_BATCH_INFO_SENSOR, False):
+        static_sensors.append(
+            BrewfatherSensor(
+                coordinator=coordinator,
+                batch_id="all_batches_global",
+                sensorKind=SensorKinds.all_batch_info,
+                description=SensorEntityDescription(key="all_batches_data", name="All batches data", icon="mdi:database"),
+            )
+        ) 
+    
+    async_add_entities(static_sensors, update_before_add=False)
+
+    # 2. Описуємо всі типи сенсорів, які потрібно створювати для КОЖНОГО батча
     sensor_definitions = [
         (SensorKinds.fermenting_name, SensorEntityDescription(key="recipe_name", name="Recipe name", icon="mdi:glass-mug")),
         (SensorKinds.brewer, SensorEntityDescription(key="brewer", name="Brewer", icon="mdi:account")),
@@ -142,34 +143,66 @@ async def async_setup_entry(
         (SensorKinds.events, SensorEntityDescription(key="events", name="Events", icon="mdi:calendar-clock")),
     ]
 
-    # Створюємо сенсори для кожного знайденого батча
-    for batch_data in all_batches_to_process:
-        batch_id = batch_data.batch_id
-        
-        for sensor_kind, description in sensor_definitions:
-            sensors.append(
-                BrewfatherSensor(
-                    coordinator=coordinator,
-                    batch_id=batch_id,
-                    sensorKind=sensor_kind,
-                    description=description,
-                )
-            )
+    # 3. Створюємо сховище для відстеження вже відомих батчів
+    if "known_batches" not in hass.data[DOMAIN][entry.entry_id]:
+        hass.data[DOMAIN][entry.entry_id]["known_batches"] = set()
+    
+    known_batches = hass.data[DOMAIN][entry.entry_id]["known_batches"]
 
-    # All Batch Info (залишаємо як загальний сенсор, якщо увімкнено)
-    all_batch_info_sensor = entry.data.get(CONF_ALL_BATCH_INFO_SENSOR, False)
-    if all_batch_info_sensor:
-        sensors.append(
-            BrewfatherSensor(
-                coordinator=coordinator,
-                batch_id="all_batches_global", # Спеціальний ID
-                sensorKind=SensorKinds.all_batch_info,
-                description=SensorEntityDescription(key="all_batches_data", name="All batches data", icon="mdi:database"),
-            )
-        ) 
+    @callback
+    def async_discover_batches():
+        """Шукає нові батчі та видаляє архівні під час кожного оновлення координатора."""
+        if not coordinator.last_update_success or not coordinator.data:
+            return
 
-    async_add_entities(sensors, update_before_add=False)
+        # Збираємо актуальні ID батчів з API
+        current_batches = set()
+        if getattr(coordinator.data, "batch_id", None):
+            current_batches.add(coordinator.data.batch_id)
+        if hasattr(coordinator.data, "other_batches") and coordinator.data.other_batches:
+            for b in coordinator.data.other_batches:
+                if getattr(b, "batch_id", None):
+                    current_batches.add(b.batch_id)
 
+        # Крок А: Шукаємо та додаємо НОВІ батчі
+        new_batch_ids = current_batches - known_batches
+        if new_batch_ids:
+            new_entities = []
+            for batch_id in new_batch_ids:
+                _LOGGER.info("Знайдено новий батч: %s. Створюємо сутності.", batch_id)
+                for sensor_kind, description in sensor_definitions:
+                    new_entities.append(
+                        BrewfatherSensor(
+                            coordinator=coordinator,
+                            batch_id=batch_id,
+                            sensorKind=sensor_kind,
+                            description=description,
+                        )
+                    )
+            
+            async_add_entities(new_entities)
+            known_batches.update(new_batch_ids)
+
+        # Крок Б: Видаляємо АРХІВНІ батчі (ті, що зникли з API)
+        removed_batch_ids = known_batches - current_batches
+        if removed_batch_ids:
+            dev_reg = dr.async_get(hass)
+            for batch_id in removed_batch_ids:
+                _LOGGER.info("Батч %s більше не активний. Видаляємо пристрій.", batch_id)
+                # Шукаємо пристрій у реєстрі за нашим identifier
+                device = dev_reg.async_get_device(identifiers={(DOMAIN, batch_id)})
+                if device:
+                    dev_reg.async_remove_device(device.id) # Це автоматично видалить і всі сенсори!
+                
+                known_batches.remove(batch_id)
+
+    # 4. Реєструємо слухача, який буде викликати async_discover_batches при кожному оновленні
+    entry.async_on_unload(
+        coordinator.async_add_listener(async_discover_batches)
+    )
+
+    # 5. Робимо перший виклик вручну, щоб створити сутності при старті системи
+    async_discover_batches()
 
 class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
     """An entity using CoordinatorEntity."""
