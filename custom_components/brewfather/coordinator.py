@@ -177,52 +177,40 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
             
         return main_batch_data
     
-def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> BrewfatherCoordinatorData | None:
-    data = BrewfatherCoordinatorData()
-    
-    # 1. ЗАПОВНЮЄМО БАЗОВІ ДАНІ (доступні завжди, незалежно від статусу)
-    data.batch_id = currentBatch.batch.id
-    data.status = currentBatch.batch.status # ВАЖЛИВО: переконайся, що в models/batch_item.py є поле `status`
-    data.batch_no = currentBatch.batch.batch_no # ВАЖЛИВО: переконайся, що в models/batch_item.py є поле `batch_no`
-    data.brew_name = currentBatch.batch.recipe.name if currentBatch.batch.recipe else "Unknown"
-    data.brewer = currentBatch.batch.brewer
-    data.batch_notes = currentBatch.batch.batch_notes
-    data.events = currentBatch.batch.events
-    data.last_reading = currentBatch.last_reading
-    
-    # Витягуємо дати та показники з рецепту/вимірювань (якщо ти додав їх у batch_item.py, використовуй їх. 
-    # Інакше можна тимчасово обійтися raw даними, про це нижче).
-    if hasattr(currentBatch.batch, "brewDate"):
-        data.brew_date = currentBatch.batch.brewDate
-    
-    # 2. ЗБЕРІГАЄМО RAW ДАНІ (Для додаткових атрибутів)
-    # Оскільки Pydantic/Dataclasses (у models/batch_item.py) можуть обрізати невідомі поля,
-    # ми беремо raw словник, якщо він доступний.
-    if hasattr(currentBatch.batch, "dict"):
-        data.raw_data = currentBatch.batch.dict()
-    elif hasattr(currentBatch.batch, "__dict__"):
-        data.raw_data = currentBatch.batch.__dict__
-
-    # Парсимо ABV, OG, FG (пробуємо з виміряного, інакше з рецепту)
-    measured = data.raw_data.get("measured", {})
-    recipe_data = data.raw_data.get("recipe", {})
-    data.measured_abv = measured.get("abv", recipe_data.get("abv"))
-    data.measured_og = measured.get("og", recipe_data.get("og"))
-    data.measured_fg = measured.get("fg", recipe_data.get("fg"))
-
-    # 3. ШУКАЄМО ДАТУ ПОЧАТКУ ФЕРМЕНТАЦІЇ (Для розрахунку кроків температур)
-    fermenting_start: int | None = None
-    for note in currentBatch.batch.notes:
-        if note.status == "Fermenting": # Розкоментував цю перевірку, бо інакше береться остання нотатка!
-            fermenting_start = note.timestamp
-            break # Знайшли - виходимо з циклу
-    
-    # Якщо немає fermenting_start, ми просто повертаємо базові дані (для Planning, Brewing тощо)
-    # Раніше тут було `if fermenting_start is None: return None`, що вбивало всі інші статуси!
-    if fermenting_start is not None:
-        data.start_date = self.datetime_fromtimestamp(fermenting_start)
+    def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> BrewfatherCoordinatorData | None:
+        data = BrewfatherCoordinatorData()
         
-        # 4. ЛОГІКА ТЕМПЕРАТУРНИХ КРОКІВ (Тільки якщо є рецепт і кроки ферментації)
+        # 1. Завжди парсимо базові дані (для будь-якого стану варки)
+        data.batch_id = currentBatch.batch.id
+        data.status = currentBatch.batch.status
+        data.batch_no = currentBatch.batch.batch_no
+        data.brew_name = currentBatch.batch.recipe.name if currentBatch.batch.recipe else "Unknown"
+        data.brewer = currentBatch.batch.brewer
+        data.brew_date = currentBatch.batch.brew_date
+        data.measured_og = currentBatch.batch.measured_og
+        data.measured_fg = currentBatch.batch.measured_fg
+        data.measured_abv = currentBatch.batch.measured_abv
+        data.raw_data = currentBatch.batch.raw_data
+        
+        data.last_reading = currentBatch.last_reading
+        data.batch_notes = currentBatch.batch.batch_notes
+        data.events = currentBatch.batch.events
+
+        # 2. Шукаємо початок ферментації (для логіки температурних кроків)
+        fermenting_start: int | None = None
+        if currentBatch.batch.notes:
+            for note in currentBatch.batch.notes:
+                if note.status == "Fermenting":
+                    fermenting_start = note.timestamp
+                    break
+
+        # Якщо ми ще не на етапі ферментації (Planning, Brewing) — повертаємо базові дані.
+        # Раніше тут було `if fermenting_start is None: return None`, що вбивало відображення цих батчів!
+        if fermenting_start is None:
+            return data
+        
+        # 3. Логіка температурних кроків (тільки якщо ферментація почалась і є рецепт)
+        data.start_date = self.datetime_fromtimestamp(fermenting_start)
         currentStep: Step | None = None
         nextStep: Step | None = None
         prevStep: Step | None = None
@@ -238,7 +226,10 @@ def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> B
                 step_start_datetime_utc = self.datetime_fromtimestamp_with_fermentingstart(
                     step.actual_time, fermenting_start
                 )
-                
+                step_end_datetime_utc = self.datetime_fromtimestamp_with_fermentingstart(
+                    step.actual_time + step.step_time * MS_IN_DAY, fermenting_start
+                )
+
                 actual_start_time_utc = step_start_datetime_utc
                 if self.temperature_correction_enabled and step.ramp is not None and step.ramp > 0:
                     actual_start_time_utc = step_start_datetime_utc + timedelta(days = -1 * step.ramp)
@@ -257,7 +248,6 @@ def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> B
             if currentStep is not None:
                 data.current_step_temperature = currentStep.step_temp
                 
-                # Логіка Ramping'у (залишаємо без змін)
                 rampingStep = currentStep
                 stepBeforeRamp = prevStep
                 if self.temperature_correction_enabled and curren_step_is_ramping and stepBeforeRamp is not None and rampingStep.ramp is not None and rampingStep.ramp > 0:
@@ -265,7 +255,7 @@ def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> B
                     if number_of_steps > 0:
                         ramp_hours = rampingStep.ramp * 24
                         hours_per_ramp = ramp_hours / number_of_steps
-                        
+
                         time_already_ramping:timedelta = (current_step_actual_start_time_utc - currentTimeUtc)
                         hours_already_ramping  = abs((time_already_ramping.days * 24) + (time_already_ramping.seconds / 3600))
                         current_ramp_step = math.floor(hours_already_ramping / hours_per_ramp)
@@ -283,7 +273,7 @@ def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> B
                     nextStep.actual_time, fermenting_start
                 )
 
-    return data
+        return data
 
     def datetime_fromtimestamp(self, epoch: int) -> datetime:
         return datetime.fromtimestamp(epoch / 1000, timezone.utc)
