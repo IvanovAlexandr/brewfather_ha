@@ -218,7 +218,6 @@ class Step:
             result["stepTime"] = from_union([to_float, from_none], self.step_time)
         return result
 
-
 class Fermentation:
     steps: Optional[List[Step]]
 
@@ -270,13 +269,32 @@ class Recipe:
         return result
 
 
+class Stage:
+    _id: str
+    name: str
+    batchNo: str
+    status: str
+    brewer: str
+    brewDate: str
+    recipe_name: str
+
+    def __init__(self, _id: str, name: str, batchNo: str, status: str, brewer: str, brewDate: str, recipe_name: str) -> None:
+        self._id = _id
+        self.name = name
+        self.batchNo = batchNo
+        self.status = status
+        self.brewer = brewer
+        self.brewDate = brewDate
+        self.recipe_name = recipe_name
+
 class BatchItem:
-    id: Optional[str]
-    name: Optional[str]
-    batch_no: Optional[int]
-    status: Optional[str]
-    brew_date: Optional[int]
-    recipe: Optional[Recipe]
+    id: str
+    name: str
+    batch_no: int
+    status: str
+    brewer: str
+    brew_date: int
+    recipe: Recipe
     notes: Optional[List[Note]]
     measured_og: Optional[float]
     batch_notes: Optional[str]
@@ -284,11 +302,12 @@ class BatchItem:
     #Add the readings to fermentingBatch with a fake property
     readings: Optional[List[Reading]]
 
-    def __init__(self, id: Optional[str], name: Optional[str], batch_no: Optional[int], status: Optional[str], brew_date: Optional[int], recipe: Optional[Recipe], notes: Optional[List[Note]], measured_og: Optional[float], batch_notes: Optional[str] = None, events: Optional[List[Event]] = None) -> None:
+    def __init__(self, id: str, name: str, batch_no: int, status: str, brewer: str, brew_date: int, recipe: Recipe, notes: Optional[List[Note]], measured_og: Optional[float], batch_notes: Optional[str] = None, events: Optional[List[Event]] = None) -> None:
         self.id = id
         self.name = name
         self.batch_no = batch_no
         self.status = status
+        self.brewer = brewer
         self.brew_date = brew_date
         self.recipe = recipe
         self.notes = notes
@@ -305,6 +324,7 @@ class BatchItem:
         name = parse_field(obj, "name", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
         batch_no = parse_field(obj, "batchNo", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
         status = parse_field(obj, "status", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
+        brewer = parse_field(obj, "brewer", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
         brew_date = parse_field(obj, "brewDate", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
         recipe = parse_field(obj, "recipe", lambda x: from_union([Recipe.from_dict, from_none], x), "BatchItem", errors)
         notes = parse_field(obj, "notes", lambda x: from_union([lambda x: from_list(Note.from_dict, x), from_none], x), "BatchItem", errors)
@@ -325,6 +345,8 @@ class BatchItem:
             result["batchNo"] = from_union([from_int, from_none], self.batch_no)
         if self.status is not None:
             result["status"] = from_union([from_str, from_none], self.status)
+        if self.brewer is not None:
+            result["brewer"] = from_union([from_str, from_none], self.brewer)
         if self.brew_date is not None:
             result["brewDate"] = from_union([from_int, from_none], self.brew_date)
         if self.recipe is not None:
@@ -344,6 +366,7 @@ class BatchItem:
         result["name"] = from_union([from_str, from_none], from_union(
             [lambda x: to_class(Recipe, x), from_none], self.recipe
         )["name"])
+        result["brewer"] = from_union([from_str, from_none], self.brewer)
         result["brewDate"] = datetime.datetime.fromtimestamp(self.brew_date / 1000)
         result["batchNo"] = from_union([from_int, from_none], self.batch_no)
         fermenting_start = self.recipe.fermentation.steps[0].actual_time / 1000

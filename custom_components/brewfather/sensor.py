@@ -131,6 +131,19 @@ async def async_setup_entry(
     sensors.append(
         BrewfatherSensor(
             coordinator,
+            SensorKinds.brewer,
+            SensorEntityDescription(
+                key="brewer",
+                name="Brewer",
+                icon="mdi:account",
+            )
+        )
+    )
+
+
+    sensors.append(
+        BrewfatherSensor(
+            coordinator,
             SensorKinds.fermenting_current_temperature,
             SensorEntityDescription(
                 key="target_temperature",
@@ -532,3 +545,4 @@ class SensorKinds(enum.Enum):
     fermenting_start_date = 8
     batch_notes = 9
     events = 10
+    brewer = 11
