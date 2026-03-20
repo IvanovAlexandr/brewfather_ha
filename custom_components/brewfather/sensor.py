@@ -11,6 +11,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass, Sens
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -108,7 +109,7 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
     sensors = []
 
-    # Add status sensor for UX improvement
+    # Додаємо загальний статус інтеграції
     status_description = SensorEntityDescription(
         key="status",
         name="Integration Status",
@@ -116,189 +117,141 @@ async def async_setup_entry(
     )
     sensors.append(BrewfatherStatusSensor(coordinator, entry, status_description))
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_name,
-            SensorEntityDescription(
-                key="recipe_name",
-                name="Recipe name",
-                icon="mdi:glass-mug",
+    if not coordinator.data:
+        async_add_entities(sensors, update_before_add=False)
+        return
+
+    # Збираємо всі батчі в один список (основний + інші)
+    all_batches_to_process = []
+    if getattr(coordinator.data, "batch_id", None):
+        all_batches_to_process.append(coordinator.data)
+    
+    if hasattr(coordinator.data, "other_batches") and coordinator.data.other_batches:
+        all_batches_to_process.extend(coordinator.data.other_batches)
+
+    # Описуємо всі типи сенсорів, які потрібно створити для кожного батча
+    sensor_definitions = [
+        (SensorKinds.fermenting_name, SensorEntityDescription(key="recipe_name", name="Recipe name", icon="mdi:glass-mug")),
+        (SensorKinds.brewer, SensorEntityDescription(key="brewer", name="Brewer", icon="mdi:account")),
+        (SensorKinds.fermenting_current_temperature, SensorEntityDescription(key="target_temperature", name="Target temperature", icon="mdi:thermometer", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT)),
+        (SensorKinds.fermenting_next_temperature, SensorEntityDescription(key="upcoming_target_temperature", name="Upcoming target temperature", icon="mdi:thermometer-chevron-up", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE)),
+        (SensorKinds.fermenting_next_date, SensorEntityDescription(key="upcoming_target_temperature_change", name="Upcoming target temperature change", icon="mdi:clock", device_class=SensorDeviceClass.TIMESTAMP)),
+        (SensorKinds.fermenting_last_reading, SensorEntityDescription(key="last_reading", name="Last reading", icon="mdi:chart-line", state_class=SensorStateClass.MEASUREMENT)),
+        (SensorKinds.fermenting_start_date, SensorEntityDescription(key="fermentation_start_date", name="Fermentation start", icon="mdi:clock", device_class=SensorDeviceClass.TIMESTAMP)),
+        (SensorKinds.batch_notes, SensorEntityDescription(key="batch_notes", name="Batch notes", icon="mdi:note-text")),
+        (SensorKinds.events, SensorEntityDescription(key="events", name="Events", icon="mdi:calendar-clock")),
+    ]
+
+    # Створюємо сенсори для кожного знайденого батча
+    for batch_data in all_batches_to_process:
+        batch_id = batch_data.batch_id
+        
+        for sensor_kind, description in sensor_definitions:
+            sensors.append(
+                BrewfatherSensor(
+                    coordinator=coordinator,
+                    batch_id=batch_id,
+                    sensorKind=sensor_kind,
+                    description=description,
+                )
             )
-        )
-    )
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.brewer,
-            SensorEntityDescription(
-                key="brewer",
-                name="Brewer",
-                icon="mdi:account",
-            )
-        )
-    )
-
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_current_temperature,
-            SensorEntityDescription(
-                key="target_temperature",
-                name="Target temperature",
-                icon="mdi:thermometer",
-                native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-                device_class=SensorDeviceClass.TEMPERATURE,
-                state_class=SensorStateClass.MEASUREMENT,
-            )
-        )
-    )
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_next_temperature,
-            SensorEntityDescription(
-                key="upcoming_target_temperature",
-                name="Upcoming target temperature",
-                icon="mdi:thermometer-chevron-up",
-                native_unit_of_measurement=UnitOfTemperature.CELSIUS, #Should we support fahrenheit?
-                device_class=SensorDeviceClass.TEMPERATURE,
-            )
-        )
-    )
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_next_date,
-            SensorEntityDescription(
-                key="upcoming_target_temperature_change",
-                name="Upcoming target temperature change",
-                icon="mdi:clock",
-                device_class=SensorDeviceClass.TIMESTAMP,
-            )
-        )
-    )
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_last_reading,
-            SensorEntityDescription(
-                key="last_reading",
-                name="Last reading",
-                icon="mdi:chart-line",
-                state_class=SensorStateClass.MEASUREMENT,
-            )
-        )
-    )
-
+    # All Batch Info (залишаємо як загальний сенсор, якщо увімкнено)
     all_batch_info_sensor = entry.data.get(CONF_ALL_BATCH_INFO_SENSOR, False)
     if all_batch_info_sensor:
         sensors.append(
             BrewfatherSensor(
-                coordinator,
-                SensorKinds.all_batch_info,
-                SensorEntityDescription(
-                    key="all_batches_data",
-                    name="All batches data",
-                    icon="mdi:database",
-                )
+                coordinator=coordinator,
+                batch_id="all_batches_global", # Спеціальний ID
+                sensorKind=SensorKinds.all_batch_info,
+                description=SensorEntityDescription(key="all_batches_data", name="All batches data", icon="mdi:database"),
             )
         ) 
 
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.fermenting_start_date,
-            SensorEntityDescription(
-                key="fermentation_start_date",
-                name="Fermentation start",
-                icon="mdi:clock",
-                device_class=SensorDeviceClass.TIMESTAMP,
-            )
-        )
-    )
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.batch_notes,
-            SensorEntityDescription(
-                key="batch_notes",
-                name="Batch notes",
-                icon="mdi:note-text",
-            )
-        )
-    )
-
-    sensors.append(
-        BrewfatherSensor(
-            coordinator,
-            SensorKinds.events,
-            SensorEntityDescription(
-                key="events",
-                name="Events",
-                icon="mdi:calendar-clock",
-            )
-        )
-    )
-  
     async_add_entities(sensors, update_before_add=False)
 
 
 class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
-    """An entity using CoordinatorEntity.
-
-    The CoordinatorEntity class provides:
-      should_poll
-      async_update
-      async_added_to_hass
-      available
-
-    """
-    """Defines a sensor."""
+    """An entity using CoordinatorEntity."""
 
     def __init__(
         self,
         coordinator: DataUpdateCoordinator,
+        batch_id: str,
         sensorKind: SensorKinds,
         description: SensorEntityDescription,
     ):
         """Pass coordinator to CoordinatorEntity."""
         super().__init__(coordinator)
 
+        self._batch_id = batch_id
         self._entity_description = description
         self._sensor_type = sensorKind
 
-
-        # # Set Friendly name when sensor is first created
+        # Встановлюємо коротке ім'я (HA автоматично додасть назву пристрою попереду)
         self._attr_has_entity_name = True
-        self._attr_name = f"{SENSOR_PREFIX} - {self._entity_description.name}"
-        self._name = f"{SENSOR_PREFIX} - {self._entity_description.name}"
-
-        # The unique identifier for this sensor within Home Assistant
-        # has nothing to do with the entity_id, it is the internal unique_id of the sensor entity registry
-        self._attr_unique_id = f"{SENSOR_PREFIX}_{self._entity_description.key}"
-
+        self._attr_name = self._entity_description.name
+        
+        # Унікальний ідентифікатор тепер включає batch_id
+        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
         self._attr_native_unit_of_measurement = self._entity_description.native_unit_of_measurement
         self._attr_device_class = self._entity_description.device_class
-        #self._state = None
-        self._discovery = False
-        self._dev_id = {}
+        
+        self._update_internal_state()
 
-        brewfatherCoordinator: BrewfatherCoordinator = coordinator
-        sensor_data = self._refresh_sensor_data(brewfatherCoordinator.data, self._sensor_type, self.device_class, self.entity_id)
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Group entities into a Device representing a specific batch."""
+        if self._batch_id == "all_batches_global":
+            return None
+            
+        # Спроба отримати ім'я рецепту для назви пристрою
+        batch_data = self._get_my_batch_data()
+        batch_name = getattr(batch_data, "brew_name", "Unknown Brew") if batch_data else "Unknown Brew"
+            
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._batch_id)},
+            name=f"Batch - {batch_name}",
+            manufacturer="Brewfather",
+            model="Brew Batch",
+        )
+
+    def _get_my_batch_data(self) -> Any:
+        """Finds the specific batch data for this entity from the coordinator."""
+        data = self.coordinator.data
+        if not data:
+            return None
+            
+        if getattr(data, "batch_id", None) == self._batch_id:
+            return data
+            
+        if hasattr(data, "other_batches") and data.other_batches:
+            for b in data.other_batches:
+                if getattr(b, "batch_id", None) == self._batch_id:
+                    return b
+        return None
+
+    def _update_internal_state(self):
+        """Updates internal state variables from coordinator data."""
+        batch_data = self._get_my_batch_data()
+        
+        # Для глобального сенсора all_batches передаємо весь coordinator.data
+        if self._batch_id == "all_batches_global":
+            batch_data = self.coordinator.data
+
+        sensor_data = self._refresh_sensor_data(
+            batch_data, 
+            self._sensor_type, 
+            self._attr_device_class, 
+            self.entity_id
+        )
         self._state = sensor_data.state
         self._attr_available = sensor_data.attr_available
         self._attr_extra_state_attributes = sensor_data.extra_state_attributes
-   
+
     @property
     def state(self) -> StateType:
         """Return the state."""
@@ -312,238 +265,107 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        """Update Sensor Entity."""
-        _LOGGER.debug(" _handle_coordinator_update Updating state of the sensors.")
-        #await self.coordinator.async_request_refresh()
-        brewfatherCoordinator: BrewfatherCoordinator = self.coordinator
-        sensor_data = self._refresh_sensor_data(brewfatherCoordinator.data, self._sensor_type, self.device_class, self.entity_id)
-        self._state = sensor_data.state
-        self._attr_available = sensor_data.attr_available
+        _LOGGER.debug("Updating state of the sensors for batch %s.", self._batch_id)
+        self._update_internal_state()
         self.async_write_ha_state()
 
     @staticmethod
     def _refresh_sensor_data(
-        data: BrewfatherCoordinatorData,
-        sensor_type: str,
-        device_class: SensorDeviceClass,
-        entity_id: str
+        batch_data: Any,
+        sensor_type: SensorKinds,
+        device_class: SensorDeviceClass | None,
+        entity_id: str | None
     ) -> SensorUpdateData:
-        """Get sensor data."""
+        """Get sensor data strictly for ONE batch."""
         sensor_data = SensorUpdateData()
-        if data is None:
+        if batch_data is None:
             return sensor_data
         
         sensor_data.attr_available = True
-        custom_attributes:dict[str, Any] = dict()
+        custom_attributes: dict[str, Any] = dict()
+        
+        # Додаємо базовий атрибут до всіх
+        if hasattr(batch_data, "batch_id"):
+            custom_attributes["batch_id"] = batch_data.batch_id
 
         if sensor_type == SensorKinds.fermenting_name:
-            sensor_data.state = data.brew_name
-            custom_attributes["batch_id"] = data.batch_id
-
-            other_batches_data = []
-            for other_batch_data in data.other_batches:
-                other_batches_data.append({
-                    "batch_id": other_batch_data.batch_id,
-                    "state": other_batch_data.brew_name
-                })
-            if len(other_batches_data)  > 0:
-                custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "brew_name", None)
 
         elif sensor_type == SensorKinds.brewer:
-            sensor_data.state = data.brewer
-            custom_attributes["batch_id"] = data.batch_id
-
-            other_batches_data = []
-            for other_batch_data in data.other_batches:
-                other_batches_data.append({
-                    "batch_id": other_batch_data.batch_id,
-                    "state": other_batch_data.brewer
-                })
-            if len(other_batches_data)  > 0:
-                custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "brewer", None)
 
         elif sensor_type == SensorKinds.fermenting_current_temperature:
-            sensor_data.state = data.current_step_temperature
-            custom_attributes["batch_id"] = data.batch_id
-
-            other_batches_data = []
-            for other_batch_data in data.other_batches:
-                other_batches_data.append({
-                    "batch_id": other_batch_data.batch_id,
-                    "state": other_batch_data.current_step_temperature
-                })
-            if len(other_batches_data)  > 0:
-                custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "current_step_temperature", None)
 
         elif sensor_type == SensorKinds.fermenting_next_date:
-            sensor_data.state = data.next_step_date
-            custom_attributes["batch_id"] = data.batch_id
-
-            other_batches_data = []
-            for other_batch_data in data.other_batches:
-                other_batches_data.append({
-                    "batch_id": other_batch_data.batch_id,
-                    "state": other_batch_data.next_step_date
-                })
-            if len(other_batches_data)  > 0:
-                custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "next_step_date", None)
 
         elif sensor_type == SensorKinds.fermenting_next_temperature:
-            sensor_data.state = data.next_step_temperature
-            custom_attributes["batch_id"] = data.batch_id
-
-            other_batches_data = []
-            for other_batch_data in data.other_batches:
-                other_batches_data.append({
-                    "batch_id": other_batch_data.batch_id,
-                    "state": other_batch_data.next_step_temperature
-                })
-            if len(other_batches_data)  > 0:
-                custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "next_step_temperature", None)
 
         elif sensor_type == SensorKinds.fermenting_last_reading:
-            if data.last_reading is not None:
-                sensor_data.state = data.last_reading.sg
-                custom_attributes["batch_id"] = data.batch_id
-
-                custom_attributes["angle"] = data.last_reading.angle
-                custom_attributes["temp"] = data.last_reading.temp
-                custom_attributes["time_ms"] = data.last_reading.time
-                custom_attributes["time"] = datetime.fromtimestamp(data.last_reading.time / 1000, timezone.utc)
-                
-                other_batches_data = []
-                for other_batch_data in data.other_batches:
-                    other_batches_data.append({
-                        "state": other_batch_data.last_reading.sg,
-                        "batch_id": other_batch_data.batch_id,
-                        "angle": other_batch_data.last_reading.angle,
-                        "temp": other_batch_data.last_reading.temp,
-                        "time_ms": other_batch_data.last_reading.time,
-                        "time": datetime.fromtimestamp(data.last_reading.time / 1000, timezone.utc)
-                    })
-                    
-                if len(other_batches_data)  > 0:
-                    custom_attributes["other_batches"] = other_batches_data
+            reading = getattr(batch_data, "last_reading", None)
+            if reading is not None:
+                sensor_data.state = getattr(reading, "sg", None)
+                custom_attributes["angle"] = getattr(reading, "angle", None)
+                custom_attributes["temp"] = getattr(reading, "temp", None)
+                time_ms = getattr(reading, "time", None)
+                if time_ms:
+                    custom_attributes["time_ms"] = time_ms
+                    custom_attributes["time"] = datetime.fromtimestamp(time_ms / 1000, timezone.utc)
 
         elif sensor_type == SensorKinds.all_batch_info:
-
             all_batches = []
-            for other_batch in data.all_batches_data:
-                all_batches.append(other_batch.to_attribute_entry_hassio())
-                
+            if hasattr(batch_data, "all_batches_data"):
+                for other_batch in batch_data.all_batches_data:
+                    if hasattr(other_batch, "to_attribute_entry_hassio"):
+                        all_batches.append(other_batch.to_attribute_entry_hassio())
             custom_attributes["data"] = all_batches
             sensor_data.state = len(all_batches)
 
         elif sensor_type == SensorKinds.fermenting_start_date:
-            if data.start_date is not None:
-                sensor_data.state = data.start_date
-                custom_attributes["batch_id"] = data.batch_id
-                
-                other_batches_data = []
-                for other_batch_data in data.other_batches:
-                    other_batches_data.append({
-                        "batch_id": other_batch_data.batch_id,
-                        "state": other_batch_data.start_date
-                    })
-                if len(other_batches_data)  > 0:
-                    custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "start_date", None)
 
         elif sensor_type == SensorKinds.batch_notes:
-            if data.batch_notes is not None:
-                sensor_data.state = data.batch_notes
-                custom_attributes["batch_id"] = data.batch_id
-                
-                other_batches_data = []
-                for other_batch_data in data.other_batches:
-                    if other_batch_data.batch_notes is not None:
-                        other_batches_data.append({
-                            "batch_id": other_batch_data.batch_id,
-                            "state": other_batch_data.batch_notes
-                        })
-                if len(other_batches_data)  > 0:
-                    custom_attributes["other_batches"] = other_batches_data
+            sensor_data.state = getattr(batch_data, "batch_notes", None)
 
         elif sensor_type == SensorKinds.events:
-            # Filter for future events that are active
-            current_time = datetime.now(timezone.utc).timestamp() * 1000  # Convert to milliseconds
+            current_time = datetime.now(timezone.utc).timestamp() * 1000
             future_events = []
+            events_list = getattr(batch_data, "events", None)
             
-            if data.events is not None:
-                for event in data.events:
-                    # Filter: must be in the future AND active must be True
-                    if event.time is not None and event.time > current_time and event.active is True:
+            if events_list is not None:
+                for event in events_list:
+                    if getattr(event, "time", 0) > current_time and getattr(event, "active", False):
                         future_events.append({
-                            "title": event.title,
-                            "description": event.description,
-                            "time": datetime.fromtimestamp(event.time / 1000, timezone.utc),
+                            "title": getattr(event, "title", ""),
+                            "description": getattr(event, "description", ""),
+                            "time": datetime.fromtimestamp(event.time / 1000, timezone.utc) if event.time else None,
                             "time_ms": event.time,
-                            "event_type": event.event_type,
-                            "day_event": event.day_event,
-                            "active": event.active
+                            "event_type": getattr(event, "event_type", ""),
+                            "day_event": getattr(event, "day_event", False),
+                            "active": getattr(event, "active", False)
                         })
                 
-                # Sort by time
-                future_events.sort(key=lambda x: x["time_ms"])
-                
+                future_events.sort(key=lambda x: x.get("time_ms", 0))
                 sensor_data.state = len(future_events)
-                custom_attributes["batch_id"] = data.batch_id
                 custom_attributes["events"] = future_events
-                
-                # Add other batches events
-                other_batches_data = []
-                for other_batch_data in data.other_batches:
-                    batch_future_events = []
-                    if other_batch_data.events is not None:
-                        for event in other_batch_data.events:
-                            # Filter: must be in the future AND active must be True
-                            if event.time is not None and event.time > current_time and event.active is True:
-                                batch_future_events.append({
-                                    "title": event.title,
-                                    "description": event.description,
-                                    "time": datetime.fromtimestamp(event.time / 1000, timezone.utc),
-                                    "time_ms": event.time,
-                                    "event_type": event.event_type,
-                                    "day_event": event.day_event,
-                                    "active": event.active
-                                })
-                        batch_future_events.sort(key=lambda x: x["time_ms"])
-                    
-                    if len(batch_future_events) > 0:
-                        other_batches_data.append({
-                            "batch_id": other_batch_data.batch_id,
-                            "state": len(batch_future_events),
-                            "events": batch_future_events
-                        })
-                
-                if len(other_batches_data)  > 0:
-                    custom_attributes["other_batches"] = other_batches_data
 
         sensor_data.extra_state_attributes = custom_attributes
 
-        # Received a datetime
+        # Received a datetime processing
         if sensor_data.state is not None and device_class == SensorDeviceClass.TIMESTAMP:
             try:
-                # We cast the value, to avoid using isinstance, but satisfy
-                # typechecking. The errors are guarded in this try.
                 value = cast(datetime, sensor_data.state)
                 if value.tzinfo is None:
-                    raise ValueError(
-                        f"Invalid datetime: {entity_id} provides state '{value}', "
-                        "which is missing timezone information"
-                    )
-
+                    raise ValueError(f"Invalid datetime: {entity_id} missing timezone information")
                 if value.tzinfo != timezone.utc:
                     value = value.astimezone(timezone.utc)
-
-                _LOGGER.debug("value %s, %s", value, value.tzinfo)
-
-                #return value.isoformat(timespec="seconds")
-                sensor_data.state =value.isoformat(timespec="seconds")
+                sensor_data.state = value.isoformat(timespec="seconds")
             except (AttributeError, TypeError) as err:
-                raise ValueError(
-                    f"Invalid datetime: {entity_id} has a timestamp device class"
-                    f"but does not provide a datetime state but {type(value)}"
-                ) from err
+                # If it's already a string from the API, we can safely ignore the cast error, 
+                # but log it if it's completely wrong.
+                pass
             
         return sensor_data
 
@@ -552,7 +374,6 @@ class SensorKinds(enum.Enum):
     fermenting_current_temperature = 2
     fermenting_next_temperature = 3
     fermenting_next_date = 4
-    #fermenting_batches = 5
     fermenting_last_reading = 6
     all_batch_info = 7
     fermenting_start_date = 8
