@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import enum
 import logging
 from typing import cast, Any
+from homeassistant.util import slugify
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.core import callback
@@ -231,8 +232,8 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._attr_has_entity_name = True
         self._attr_name = self._entity_description.name
         
-        # Унікальний ідентифікатор тепер включає batch_id
-        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{self._entity_description.key}"
+        # 👈 ЗМІНА 1: Робимо абсолютно новий unique_id (додано bf_v2_), щоб HA забув старий кеш
+        self._attr_unique_id = f"bf_v2_{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
@@ -240,6 +241,20 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._attr_device_class = self._entity_description.device_class
         
         self._update_internal_state()
+
+        # 👈 ЗМІНА 2: ПРИМУСОВЕ ФОРМУВАННЯ ENTITY_ID
+        if batch_id == "all_batches_global":
+            self.entity_id = f"sensor.brewfather_all_batches_data"
+        else:
+            # Отримуємо назву рецепту
+            batch_data = self._get_my_batch_data()
+            recipe_name = getattr(batch_data, "brew_name", str(batch_id)) if batch_data else str(batch_id)
+            
+            # slugify робить з "Nelson Sauvin!" -> "nelson_sauvin"
+            safe_recipe_name = slugify(recipe_name)
+            
+            # Жорстко задаємо ID: sensor.brewfather_batch_single_hop_ale_brewer
+            self.entity_id = f"sensor.brewfather_batch_{safe_recipe_name}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
