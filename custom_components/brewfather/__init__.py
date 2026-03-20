@@ -4,7 +4,7 @@ import logging
 from homeassistant import config_entries, core
 from datetime import timedelta
 from homeassistant.exceptions import ConfigEntryNotReady 
-from homeassistant.const import Platform, CONF_USERNAME, CONF_PASSWORD
+from homeassistant.const import Platform 
 
 from .coordinator import BrewfatherCoordinator
 from .const import (
@@ -29,8 +29,8 @@ async def async_setup_entry(hass: core.HomeAssistant, config_entry: config_entri
     # """Setup our skeleton component."""
 
     update_interval = timedelta(seconds=UPDATE_INTERVAL)
-    user_key = config_entry.data[CONF_USERNAME]
-    api_key = config_entry.data[CONF_PASSWORD]
+    user_key = config_entry.data["user_key"]
+    api_key = config_entry.data["api_key"]
     options = config_entry.options
 
     connection = BrewfatherConnection(hass.helpers.aiohttp_client.async_get_clientsession(), api_key, user_key, options)
