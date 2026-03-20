@@ -141,6 +141,12 @@ async def async_setup_entry(
         (SensorKinds.fermenting_start_date, SensorEntityDescription(key="fermentation_start_date", name="Fermentation start", icon="mdi:clock", device_class=SensorDeviceClass.TIMESTAMP)),
         (SensorKinds.batch_notes, SensorEntityDescription(key="batch_notes", name="Batch notes", icon="mdi:note-text")),
         (SensorKinds.events, SensorEntityDescription(key="events", name="Events", icon="mdi:calendar-clock")),
+        (SensorKinds.status, SensorEntityDescription(key="status", name="Status", icon="mdi:list-status")),
+        (SensorKinds.batch_no, SensorEntityDescription(key="batch_no", name="Batch Number", icon="mdi:pound")),
+        (SensorKinds.measured_abv, SensorEntityDescription(key="measured_abv", name="Measured ABV", icon="mdi:percent", native_unit_of_measurement="%")),
+        (SensorKinds.measured_og, SensorEntityDescription(key="measured_og", name="Measured OG", icon="mdi:water-percent", state_class=SensorStateClass.MEASUREMENT)),
+        (SensorKinds.measured_fg, SensorEntityDescription(key="measured_fg", name="Measured FG", icon="mdi:water-percent", state_class=SensorStateClass.MEASUREMENT)),
+        (SensorKinds.brew_date, SensorEntityDescription(key="brew_date", name="Brew Date", icon="mdi:calendar", device_class=SensorDeviceClass.TIMESTAMP)),
     ]
 
     # 3. Створюємо сховище для відстеження вже відомих батчів
@@ -413,3 +419,9 @@ class SensorKinds(enum.Enum):
     batch_notes = 9
     events = 10
     brewer = 11
+    status = 12
+    batch_no = 13
+    measured_abv = 14
+    measured_og = 15
+    measured_fg = 16
+    brew_date = 17

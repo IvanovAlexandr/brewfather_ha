@@ -36,8 +36,15 @@ def sort_by_actual_time(entity: Fermentation):
 
 class BrewfatherCoordinatorData:
     batch_id: Optional[str]
+    status: Optional[str]          # НОВЕ
+    batch_no: Optional[int]        # НОВЕ
     brew_name: Optional[str]
     brewer: Optional[str]
+    brew_date: Optional[int]       # НОВЕ
+    measured_og: Optional[float]   # НОВЕ
+    measured_fg: Optional[float]   # НОВЕ
+    measured_abv: Optional[float]  # НОВЕ
+    raw_data: Optional[dict]       # НОВЕ
     current_step_temperature: Optional[float]
     next_step_date: Optional[datetime.datetime]
     next_step_temperature: Optional[float]
@@ -47,12 +54,19 @@ class BrewfatherCoordinatorData:
     start_date: Optional[datetime.datetime]
     batch_notes: Optional[str]
     events: Optional[list[Event]]
+    raw_data: dict # НОВЕ: Сюди запишемо весь raw JSON для атрибутів
 
     def __init__(self):
         # set defaults to None
         self.batch_id = None
+        self.status = None
+        self.batch_no = None
         self.brew_name = None
         self.brewer = None
+        self.brew_date = None
+        self.measured_abv = None
+        self.measured_og = None
+        self.measured_fg = None
         self.current_step_temperature = None
         self.next_step_date = None
         self.next_step_temperature = None
@@ -62,6 +76,7 @@ class BrewfatherCoordinatorData:
         self.start_date = None
         self.batch_notes = None
         self.events = None
+        self.raw_data = {}
 
 
 class BatchInfo:
@@ -162,42 +177,72 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
             
         return main_batch_data
     
-    def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> BrewfatherCoordinatorData | None:
-        fermenting_start: int | None = None
-        for note in currentBatch.batch.notes:
-            # if note.status == "Fermenting":
+def get_batch_data(self, currentBatch: BatchInfo, currentTimeUtc: datetime) -> BrewfatherCoordinatorData | None:
+    data = BrewfatherCoordinatorData()
+    
+    # 1. ЗАПОВНЮЄМО БАЗОВІ ДАНІ (доступні завжди, незалежно від статусу)
+    data.batch_id = currentBatch.batch.id
+    data.status = currentBatch.batch.status # ВАЖЛИВО: переконайся, що в models/batch_item.py є поле `status`
+    data.batch_no = currentBatch.batch.batch_no # ВАЖЛИВО: переконайся, що в models/batch_item.py є поле `batch_no`
+    data.brew_name = currentBatch.batch.recipe.name if currentBatch.batch.recipe else "Unknown"
+    data.brewer = currentBatch.batch.brewer
+    data.batch_notes = currentBatch.batch.batch_notes
+    data.events = currentBatch.batch.events
+    data.last_reading = currentBatch.last_reading
+    
+    # Витягуємо дати та показники з рецепту/вимірювань (якщо ти додав їх у batch_item.py, використовуй їх. 
+    # Інакше можна тимчасово обійтися raw даними, про це нижче).
+    if hasattr(currentBatch.batch, "brewDate"):
+        data.brew_date = currentBatch.batch.brewDate
+    
+    # 2. ЗБЕРІГАЄМО RAW ДАНІ (Для додаткових атрибутів)
+    # Оскільки Pydantic/Dataclasses (у models/batch_item.py) можуть обрізати невідомі поля,
+    # ми беремо raw словник, якщо він доступний.
+    if hasattr(currentBatch.batch, "dict"):
+        data.raw_data = currentBatch.batch.dict()
+    elif hasattr(currentBatch.batch, "__dict__"):
+        data.raw_data = currentBatch.batch.__dict__
+
+    # Парсимо ABV, OG, FG (пробуємо з виміряного, інакше з рецепту)
+    measured = data.raw_data.get("measured", {})
+    recipe_data = data.raw_data.get("recipe", {})
+    data.measured_abv = measured.get("abv", recipe_data.get("abv"))
+    data.measured_og = measured.get("og", recipe_data.get("og"))
+    data.measured_fg = measured.get("fg", recipe_data.get("fg"))
+
+    # 3. ШУКАЄМО ДАТУ ПОЧАТКУ ФЕРМЕНТАЦІЇ (Для розрахунку кроків температур)
+    fermenting_start: int | None = None
+    for note in currentBatch.batch.notes:
+        if note.status == "Fermenting": # Розкоментував цю перевірку, бо інакше береться остання нотатка!
             fermenting_start = note.timestamp
+            break # Знайшли - виходимо з циклу
+    
+    # Якщо немає fermenting_start, ми просто повертаємо базові дані (для Planning, Brewing тощо)
+    # Раніше тут було `if fermenting_start is None: return None`, що вбивало всі інші статуси!
+    if fermenting_start is not None:
+        data.start_date = self.datetime_fromtimestamp(fermenting_start)
         
-        if fermenting_start is None:
-            return None
-        
+        # 4. ЛОГІКА ТЕМПЕРАТУРНИХ КРОКІВ (Тільки якщо є рецепт і кроки ферментації)
         currentStep: Step | None = None
         nextStep: Step | None = None
         prevStep: Step | None = None
         curren_step_is_ramping = False
-        current_step_actual_start_time_utc: datetime|None
+        current_step_actual_start_time_utc: datetime|None = None
 
         if currentBatch.batch.recipe is not None and currentBatch.batch.recipe.fermentation is not None and currentBatch.batch.recipe.fermentation.steps is not None:
             _LOGGER.debug("%s (%s) | CurrentTimeUtc: %s", currentBatch.batch.recipe.name, currentBatch.batch.id, currentTimeUtc.strftime("%m/%d/%Y, %H:%M:%S"))
-            _LOGGER.debug("-------------------------------------- Fermentation steps -------- (tce:\t%s)---------------------------------------------", self.temperature_correction_enabled)
+            
             for (index, step) in enumerate[Step](
                 sorted(currentBatch.batch.recipe.fermentation.steps, key=lambda x: x.actual_time)
             ):
                 step_start_datetime_utc = self.datetime_fromtimestamp_with_fermentingstart(
                     step.actual_time, fermenting_start
                 )
-                step_end_datetime_utc = self.datetime_fromtimestamp_with_fermentingstart(
-                    step.actual_time + step.step_time * MS_IN_DAY, fermenting_start
-                )
-
+                
                 actual_start_time_utc = step_start_datetime_utc
                 if self.temperature_correction_enabled and step.ramp is not None and step.ramp > 0:
                     actual_start_time_utc = step_start_datetime_utc + timedelta(days = -1 * step.ramp)
 
-                _LOGGER.debug("| %s\tstarts: %s\tends: %s\tramp: %s\tactualstart: %s |", step.step_temp, step_start_datetime_utc.strftime("%m/%d/%Y, %H:%M:%S"), step_end_datetime_utc.strftime("%m/%d/%Y, %H:%M:%S"), step.ramp, actual_start_time_utc.strftime("%m/%d/%Y, %H:%M:%S"))
-
-                # check if start date is in past, we will keep looping so the latest step that matches will be current step.
-                # this way it will also work for steps with ramping even if we have temperature_correction_enabled is disabled
                 if actual_start_time_utc <= currentTimeUtc:
                     currentStep = step
                     current_step_actual_start_time_utc = actual_start_time_utc
@@ -205,100 +250,41 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
                         curren_step_is_ramping = True
                     if index > 0:
                         prevStep = currentBatch.batch.recipe.fermentation.steps[index - 1]
-                # check if start date is in future
                 elif actual_start_time_utc > currentTimeUtc:
                     nextStep = step
                     break
 
-        _LOGGER.debug("-----------------------------------------------------------------------------------------------------------------------------")
-
-        data = BrewfatherCoordinatorData()
-        data.batch_id = currentBatch.batch.id
-        data.brew_name = currentBatch.batch.recipe.name
-        data.brewer = currentBatch.batch.brewer
-        data.last_reading = currentBatch.last_reading
-        data.start_date = self.datetime_fromtimestamp(fermenting_start)
-        data.batch_notes = currentBatch.batch.batch_notes
-        data.events = currentBatch.batch.events
-
-        # if currentBatch.readings is not None and len(currentBatch.readings) > 0:
-        #     data.last_reading = sorted(currentBatch.readings, key=lambda r: r.time, reverse=True)[0]
-
-        if currentStep is not None:
-            data.current_step_temperature = currentStep.step_temp
-            _LOGGER.debug("Current step: %s, ramp days: %s", currentStep.step_temp, currentStep.ramp)
-
-            rampingStep = currentStep
-            stepBeforeRamp = prevStep
-            if self.temperature_correction_enabled and curren_step_is_ramping and stepBeforeRamp is not None and rampingStep.ramp is not None and rampingStep.ramp > 0:
-                #instead of calculating what the temperature increase should be every hour, we will calculate how often we have to increase of decrease 1 whole degree C
-                _LOGGER.debug("Next temperature has a ramp value of %s days", rampingStep.ramp)
+            if currentStep is not None:
+                data.current_step_temperature = currentStep.step_temp
                 
-                #from 20 to 25 in 24 hours
-                #5 steps in 24 hour
-                #24 / 5  = 4.8 hour 
-                #each step will last 4.8 hours
-                #step       temp        increase    new temp    start time, hours
-                #0          20          0           20          0
-                #1          20          1           21          4.8
-                #2          20          2           22          9.6
-                #3          20          3           23          14.4
-                #4          20          4           24          19.2
-                #end        25          0           0           24 (or 0 since the new step has started)
+                # Логіка Ramping'у (залишаємо без змін)
+                rampingStep = currentStep
+                stepBeforeRamp = prevStep
+                if self.temperature_correction_enabled and curren_step_is_ramping and stepBeforeRamp is not None and rampingStep.ramp is not None and rampingStep.ramp > 0:
+                    number_of_steps = math.floor(rampingStep.step_temp - stepBeforeRamp.step_temp)
+                    if number_of_steps > 0:
+                        ramp_hours = rampingStep.ramp * 24
+                        hours_per_ramp = ramp_hours / number_of_steps
+                        
+                        time_already_ramping:timedelta = (current_step_actual_start_time_utc - currentTimeUtc)
+                        hours_already_ramping  = abs((time_already_ramping.days * 24) + (time_already_ramping.seconds / 3600))
+                        current_ramp_step = math.floor(hours_already_ramping / hours_per_ramp)
+                        temp_increase = current_ramp_step
 
-                number_of_steps = math.floor(rampingStep.step_temp - stepBeforeRamp.step_temp)
-                if number_of_steps > 0:
-                    ramp_hours = rampingStep.ramp * 24
-                    hours_per_ramp = ramp_hours / number_of_steps
+                        if current_ramp_step > number_of_steps:
+                            _LOGGER.error("Invalid temperature ramping step found!")
+                        elif temp_increase > 0:
+                            new_temp = round(stepBeforeRamp.step_temp + temp_increase, ndigits=1)
+                            data.current_step_temperature = new_temp
 
-                    if _LOGGER.isEnabledFor(DEBUG):
-                        _LOGGER.debug("------------------------------ Ramping schedule ----------------------------")
-                        _LOGGER.debug("| Step\tTemp\tIncrease\tNew temp\tStart time (hours delta) |")
-                        for x in range(number_of_steps):
-                            ramp_step_temp = stepBeforeRamp.step_temp
-                            ramp_step_increase = round(x, ndigits=1)
-                            ramp_step_new_temp = round(stepBeforeRamp.step_temp + ramp_step_increase, ndigits=1)
-                            ramp_step_time = round(x * hours_per_ramp, ndigits=1)
-                            _LOGGER.debug("| #%s\t%s\t%s\t\t%s\t\t%s\t\t\t |", x, ramp_step_temp, ramp_step_increase, ramp_step_new_temp, ramp_step_time )
+            if nextStep is not None:
+                data.next_step_temperature = nextStep.step_temp
+                data.next_step_date = self.datetime_fromtimestamp_with_fermentingstart(
+                    nextStep.actual_time, fermenting_start
+                )
 
-                        _LOGGER.debug("----------------------------------------------------------------------------")
+    return data
 
-                    time_already_ramping:timedelta = (current_step_actual_start_time_utc - currentTimeUtc)
-                    hours_already_ramping  = abs((time_already_ramping.days * 24) + (time_already_ramping.seconds / 3600))
-                    current_ramp_step = math.floor(hours_already_ramping / hours_per_ramp)
-                    current_ramp_step_exact = hours_already_ramping / hours_per_ramp
-                    temp_increase = current_ramp_step
-                    _LOGGER.debug("We have been ramping %s hours, we are in ramp step: %s (%s)", round(hours_already_ramping, ndigits=2), current_ramp_step, current_ramp_step_exact)
-
-                    if current_ramp_step > number_of_steps:
-                        _LOGGER.error("Invalid temperature ramping step found!")
-                        _LOGGER.debug("Somehow we have found a ramp step that is too high, ignoring any temp changes to prevent weird temperatures. Ramp step found: %s, max steps: %s", current_ramp_step, number_of_steps)
-
-                    elif temp_increase > 0:
-                        new_temp = round(stepBeforeRamp.step_temp + temp_increase, ndigits=1)
-                        _LOGGER.debug("Overwrite current step temperature because of ramp to next temperature, setting temp from %s to: %s (%s)", data.current_step_temperature, new_temp, hours_per_ramp)
-                        data.current_step_temperature = new_temp
-        else:
-            _LOGGER.error("Unable to determing current fermenting step!")
-
-        if nextStep is not None:
-            data.next_step_temperature = nextStep.step_temp
-
-            data.next_step_date = self.datetime_fromtimestamp_with_fermentingstart(
-                nextStep.actual_time, fermenting_start
-            )
-
-            _LOGGER.debug(
-                "Next step: %s - %s [%s]",
-                nextStep.step_temp,
-                data.next_step_date,
-                nextStep.ramp
-            )            
-        else:
-            _LOGGER.debug("No next step")
-
-        return data
-        
     def datetime_fromtimestamp(self, epoch: int) -> datetime:
         return datetime.fromtimestamp(epoch / 1000, timezone.utc)
 

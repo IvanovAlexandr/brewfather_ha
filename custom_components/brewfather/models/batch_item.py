@@ -301,8 +301,15 @@ class BatchItem:
     events: Optional[List[Event]]
     #Add the readings to fermentingBatch with a fake property
     readings: Optional[List[Reading]]
+    measured_og: Optional[float]
+    measured_fg: Optional[float]  # НОВЕ
+    measured_abv: Optional[float] # НОВЕ
+    batch_notes: Optional[str]
+    events: Optional[List[Event]]
+    readings: Optional[List[Reading]]
+    raw_data: Optional[dict]      # НОВЕ: Збережемо весь JSON для атрибутів
 
-    def __init__(self, id: str, name: str, batch_no: int, status: str, brewer: str, brew_date: int, recipe: Recipe, notes: Optional[List[Note]], measured_og: Optional[float], batch_notes: Optional[str] = None, events: Optional[List[Event]] = None) -> None:
+    def __init__(self, id: str, name: str, batch_no: int, status: str, brewer: str, brew_date: int, recipe: Recipe, notes: Optional[List[Note]], measured_og: Optional[float], measured_fg: Optional[float] = None, measured_abv: Optional[float] = None, batch_notes: Optional[str] = None, events: Optional[List[Event]] = None) -> None:
         self.id = id
         self.name = name
         self.batch_no = batch_no
@@ -314,6 +321,12 @@ class BatchItem:
         self.measured_og = measured_og
         self.batch_notes = batch_notes
         self.events = events
+        self.measured_og = measured_og
+        self.measured_fg = measured_fg    # НОВЕ
+        self.measured_abv = measured_abv  # НОВЕ
+        self.batch_notes = batch_notes
+        self.events = events
+        self.raw_data = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'BatchItem':
@@ -332,8 +345,19 @@ class BatchItem:
         batch_notes = parse_field(obj, "batchNotes", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
         events = parse_field(obj, "events", lambda x: from_union([lambda x: from_list(Event.from_dict, x), from_none], x), "BatchItem", errors)
         
+        notes = parse_field(obj, "notes", lambda x: from_union([lambda x: from_list(Note.from_dict, x), from_none], x), "BatchItem", errors)
+        measured_og = parse_field(obj, "measuredOg", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)
+        measured_fg = parse_field(obj, "measuredFg", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)   # НОВЕ
+        measured_abv = parse_field(obj, "measuredAbv", lambda x: from_union([from_float, from_none], x), "BatchItem", errors) # НОВЕ
+        batch_notes = parse_field(obj, "batchNotes", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
+        events = parse_field(obj, "events", lambda x: from_union([lambda x: from_list(Event.from_dict, x), from_none], x), "BatchItem", errors)
+        
         raise_if_errors(errors, "BatchItem")
-        return BatchItem(id, name, batch_no, status, brewer, brew_date, recipe, notes, measured_og, batch_notes, events)
+        
+        # НОВЕ: Створюємо об'єкт і записуємо в нього оригінальний словник obj
+        item = BatchItem(id, name, batch_no, status, brewer, brew_date, recipe, notes, measured_og, measured_fg, measured_abv, batch_notes, events)
+        item.raw_data = obj 
+        return item
 
     def to_dict(self) -> dict:
         result: dict = {}
