@@ -324,7 +324,7 @@ class BatchItem:
         name = parse_field(obj, "name", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
         batch_no = parse_field(obj, "batchNo", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
         status = parse_field(obj, "status", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
-        brewer = parse_field(obj, "brewer", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
+        brewer = parse_field(obj, "brewer", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
         brew_date = parse_field(obj, "brewDate", lambda x: from_union([from_int, from_none], x), "BatchItem", errors)
         recipe = parse_field(obj, "recipe", lambda x: from_union([Recipe.from_dict, from_none], x), "BatchItem", errors)
         notes = parse_field(obj, "notes", lambda x: from_union([lambda x: from_list(Note.from_dict, x), from_none], x), "BatchItem", errors)
