@@ -228,12 +228,11 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._entity_description = description
         self._sensor_type = sensorKind
 
-        # Встановлюємо коротке ім'я (HA автоматично додасть назву пристрою попереду)
         self._attr_has_entity_name = True
         self._attr_name = self._entity_description.name
         
-        # 👈 ЗМІНА 1: Робимо абсолютно новий unique_id (додано bf_v2_), щоб HA забув старий кеш
-        self._attr_unique_id = f"bf_v2_{batch_id}_{self._entity_description.key}"
+        # unique_id залишаємо на базі batch_id (GUID від API), він і так унікальний
+        self._attr_unique_id = f"{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
@@ -242,19 +241,24 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         
         self._update_internal_state()
 
-        # 👈 ЗМІНА 2: ПРИМУСОВЕ ФОРМУВАННЯ ENTITY_ID
+        # --- МОДИФІКАЦІЯ ENTITY_ID ---
         if batch_id == "all_batches_global":
             self.entity_id = f"sensor.brewfather_all_batches_data"
         else:
-            # Отримуємо назву рецепту
             batch_data = self._get_my_batch_data()
             recipe_name = getattr(batch_data, "brew_name", str(batch_id)) if batch_data else str(batch_id)
-            
-            # slugify робить з "Nelson Sauvin!" -> "nelson_sauvin"
+            # Додаємо номер батчу прямо в ID сутності
+            batch_name = getattr(batch_data, "name", "") if batch_data else ""
+            batch_no = getattr(batch_data, "batch_no", "") if batch_data else ""
+
             safe_recipe_name = slugify(recipe_name)
+            safe_batch_name = slugify(batch_name)
             
-            # Жорстко задаємо ID: sensor.brewfather_batch_single_hop_ale_brewer
-            self.entity_id = f"sensor.brewfather_batch_{safe_recipe_name}_{self._entity_description.key}"
+            # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
+            if batch_no and safe_batch_name:
+                self.entity_id = f"sensor.brewfather_batch_{safe_batch_name}_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
+            else:
+                self.entity_id = f"sensor.brewfather_batch_{safe_recipe_name}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -262,17 +266,17 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         if self._batch_id == "all_batches_global":
             return None
             
-        # Спроба отримати ім'я рецепту для назви пристрою
         batch_data = self._get_my_batch_data()
         batch_name = getattr(batch_data, "brew_name", "Unknown Brew") if batch_data else "Unknown Brew"
+        batch_no = getattr(batch_data, "batch_no", "??") if batch_data else "??"
             
         return DeviceInfo(
             identifiers={(DOMAIN, self._batch_id)},
-            name=f"BF Batch - {batch_name}", # 👈 ЗМІНА ТУТ: додали "Brewfather "
+            # Тепер у списку пристроїв буде: "Batch #12: Nelson Sauvin"
+            name=f"Batch #{batch_no}: {batch_name}",
             manufacturer="Brewfather",
             model="Brew Batch",
         )
-
     def _get_my_batch_data(self) -> Any:
         """Finds the specific batch data for this entity from the coordinator."""
         data = self.coordinator.data
