@@ -5,7 +5,7 @@ import aiohttp # type: ignore
 import json
 from homeassistant import exceptions
 from .models.batches_item import BatchesItemElement, batches_item_from_dict
-from .models.batch_item import BatchItem, batch_item_from_dict
+from .models.batch_item import Recipe, BatchItem, batch_item_from_dict, recipes_from_dict
 from .models.reading_item import Reading, readings_from_dict
 from .models.custom_stream_data import custom_stream_data
 
@@ -14,6 +14,7 @@ from .const import (
     BATCHES_URI,
     TEST_URI,
     BATCH_URI,
+    RECIPES_URI,
     READINGS_URI,
     DRY_RUN,
     LAST_READING_URI,
@@ -97,6 +98,14 @@ class Connection:
         else:
             batch = await self.get_api_response(url, batch_item_from_dict)
             return batch    
+
+    async def get_recipes(self) -> List[Recipe]:
+        url = RECIPES_URI
+        if DRY_RUN:
+            return recipes_from_dict(json.loads(TESTDATA_BATCHES))
+        else:
+            batch = await self.get_api_response(url, recipes_from_dict)
+            return batch
 
     async def get_readings(self, batchId: str) -> List[Reading]:
         url = READINGS_URI.format(batchId)
