@@ -77,7 +77,6 @@ class BrewfatherCoordinatorData:
         self.batch_notes = None
         self.events = None
         self.raw_data = {}
-        self.recipes: list[dict] = [] # Сюди ми покладемо відповідь від /recipes
 
 
 class BatchInfo:
@@ -103,7 +102,6 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
         )
         self.custom_stream_enabled = entry.data.get(CONF_CUSTOM_STREAM_ENABLED, False)
         self.last_update_success_time: Optional[datetime] = None
-        
         if self.custom_stream_enabled:
             self.custom_stream_logging_id = entry.data.get(CONF_CUSTOM_STREAM_LOGGING_ID, None)
 
@@ -126,25 +124,13 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
             raise UpdateFailed(f"Error communicating with Brewfather API: {ex}") from ex
 
     async def update(self) -> BrewfatherCoordinatorData:
-        _LOGGER.debug("Updating batches and recipes...")
-        
-        # 1. Завантажуємо батчі
+        _LOGGER.debug("Updating data...")
         allBatches = await self.connection.get_batches()
-        
-        # 2. Завантажуємо рецепти для бібліотеки
-        allRecipes = []
-        try:
-            allRecipes = await self.connection.get_recipes()
-            _LOGGER.debug("Loaded %s recipes", len(allRecipes))
-        except Exception as ex:
-            _LOGGER.warning("Failed to load recipe library: %s", ex)
 
         fermentingBatches:list[BatchInfo] = []
-        # TODO check it
-        all_batches_data_list:list[BatchItem] = []
         all_batches_data:list[BatchInfo] = []
 
-        # Custom stream logic
+        #if custom stream enabled
         if self.custom_stream_enabled:
             stream_data = self.create_custom_stream_data()
             if stream_data is None:
@@ -169,7 +155,6 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
             elif not self.multi_batch_mode:
                 break
 
-        # TODO check it
         if len(fermentingBatches) == 0:
             return None
         
@@ -206,6 +191,7 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
         data.measured_fg = currentBatch.batch.measured_fg
         data.measured_abv = currentBatch.batch.measured_abv
         data.raw_data = currentBatch.batch.raw_data
+        
         data.last_reading = currentBatch.last_reading
         data.batch_notes = currentBatch.batch.batch_notes
         data.events = currentBatch.batch.events

@@ -116,11 +116,3 @@ def batches_item_from_dict(s: Any) -> List[BatchesItemElement]:
 
 def batches_item_to_dict(x: List[BatchesItemElement]) -> Any:
     return from_list(lambda x: to_class(BatchesItemElement, x), x)
-
-
-def recipes_from_dict(s: Any) -> List[Recipe]:
-    return from_list(Recipe.from_dict, s)
-
-
-def recipes_item_to_dict(x: List[Recipe]) -> Any:
-    return from_list(lambda x: to_class(Recipe, x), x)

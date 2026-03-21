@@ -45,7 +45,8 @@ def from_union(fs, x):
             return f(x)
         except Exception:
             pass
-    return None # Повертаємо None замість падіння, якщо жоден тип не підійшов
+    assert False, f"No matching type in union for value: {x} (type: {type(x).__name__})"
+
 
 def from_int(x: Any) -> int:
     assert isinstance(x, int) and not isinstance(x, bool), f"Expected int, got {type(x).__name__}"
@@ -71,6 +72,7 @@ def from_list(f: Callable[[Any], T], x: Any) -> List[T]:
     assert isinstance(x, list), f"Expected list, got {type(x).__name__}"
     return [f(y) for y in x]
 
+
 def to_class(c: Type[T], x: Any) -> dict:
     assert isinstance(x, c), f"Expected {c.__name__}, got {type(x).__name__}"
     return cast(Any, x).to_dict()
@@ -92,7 +94,7 @@ class Note:
     def from_dict(obj: Any) -> 'Note':
         assert isinstance(obj, dict), f"Expected dict for Note, got {type(obj).__name__}"
         errors = []
-
+        
         note = parse_field(obj, "note", lambda x: from_union([from_str, from_none], x), "Note", errors)
         type = parse_field(obj, "type", lambda x: from_union([from_str, from_none], x), "Note", errors)
         timestamp = parse_field(obj, "timestamp", lambda x: from_union([from_int, from_none], x), "Note", errors)
@@ -239,50 +241,33 @@ class Fermentation:
         return result
 
 
-# class Recipe:
-#     name: Optional[str]
-#     fermentation: Optional[Fermentation]
-
-#     def __init__(self, name: Optional[str], fermentation: Optional[Fermentation]) -> None:
-#         self.name = name
-#         self.fermentation = fermentation
-
-#     @staticmethod
-#     def from_dict(obj: Any) -> 'Recipe':
-#         assert isinstance(obj, dict), f"Expected dict for Recipe, got {type(obj).__name__}"
-#         errors = []
-        
-#         name = parse_field(obj, "name", lambda x: from_union([from_str, from_none], x), "Recipe", errors)
-#         fermentation = parse_field(obj, "fermentation", lambda x: from_union([Fermentation.from_dict, from_none], x), "Recipe", errors)
-        
-#         raise_if_errors(errors, "Recipe")
-#         return Recipe(name, fermentation)
-
-#     def to_dict(self) -> dict:
-#         result: dict = {}
-#         if self.name is not None:
-#             result["name"] = from_union([from_str, from_none], self.name)
-#         if self.fermentation is not None:
-#             result["fermentation"] = from_union([lambda x: to_class(Fermentation, x), from_none], self.fermentation)
-#         return result
-
 class Recipe:
-    def __init__(self, data: dict) -> None:
-        self.raw_data = data
-        self.id = data.get("_id")
-        self.name = data.get("name")
-        # Ми зберігаємо вкладені об'єкти як словники або класи, 
-        # щоб потім легко видати їх в атрибути сенсора
-        self.fermentation = Fermentation.from_dict(data.get("fermentation")) if data.get("fermentation") else None
+    name: Optional[str]
+    fermentation: Optional[Fermentation]
+
+    def __init__(self, name: Optional[str], fermentation: Optional[Fermentation]) -> None:
+        self.name = name
+        self.fermentation = fermentation
 
     @staticmethod
     def from_dict(obj: Any) -> 'Recipe':
-        if not isinstance(obj, dict):
-            return None
-        return Recipe(obj)
+        assert isinstance(obj, dict), f"Expected dict for Recipe, got {type(obj).__name__}"
+        errors = []
+        
+        name = parse_field(obj, "name", lambda x: from_union([from_str, from_none], x), "Recipe", errors)
+        fermentation = parse_field(obj, "fermentation", lambda x: from_union([Fermentation.from_dict, from_none], x), "Recipe", errors)
+        
+        raise_if_errors(errors, "Recipe")
+        return Recipe(name, fermentation)
 
     def to_dict(self) -> dict:
-        return self.raw_data
+        result: dict = {}
+        if self.name is not None:
+            result["name"] = from_union([from_str, from_none], self.name)
+        if self.fermentation is not None:
+            result["fermentation"] = from_union([lambda x: to_class(Fermentation, x), from_none], self.fermentation)
+        return result
+
 
 class Stage:
     _id: str
@@ -329,8 +314,8 @@ class BatchItem:
         self.recipe = recipe
         self.notes = notes
         self.measured_og = measured_og
-        self.measured_fg = measured_fg
-        self.measured_abv = measured_abv
+        self.measured_fg = measured_fg    
+        self.measured_abv = measured_abv  
         self.batch_notes = batch_notes
         self.events = events
         self.readings = None
@@ -351,8 +336,8 @@ class BatchItem:
         
         notes = parse_field(obj, "notes", lambda x: from_union([lambda x: from_list(Note.from_dict, x), from_none], x), "BatchItem", errors)
         measured_og = parse_field(obj, "measuredOg", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)
-        measured_fg = parse_field(obj, "measuredFg", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)
-        measured_abv = parse_field(obj, "measuredAbv", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)
+        measured_fg = parse_field(obj, "measuredFg", lambda x: from_union([from_float, from_none], x), "BatchItem", errors)   # НОВЕ
+        measured_abv = parse_field(obj, "measuredAbv", lambda x: from_union([from_float, from_none], x), "BatchItem", errors) # НОВЕ
         batch_notes = parse_field(obj, "batchNotes", lambda x: from_union([from_str, from_none], x), "BatchItem", errors)
         events = parse_field(obj, "events", lambda x: from_union([lambda x: from_list(Event.from_dict, x), from_none], x), "BatchItem", errors)
         

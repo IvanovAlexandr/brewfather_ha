@@ -211,32 +211,8 @@ async def async_setup_entry(
     # 5. Робимо перший виклик вручну, щоб створити сутності при старті системи
     async_discover_batches()
 
-    @callback
-    def async_discover_recipes():
-        """Створює сутності для кожного рецепта з бібліотеки."""
-        if not coordinator.data or not hasattr(coordinator.data, "recipes"):
-            return
-
-        existing_recipe_entities = er.async_get(hass).entities
-        new_recipes = []
-        
-        for recipe in coordinator.data.recipes:
-            unique_id = f"bf_recipe_{recipe.get('_id')}"
-            # Перевіряємо, чи ми вже створювали цей рецепт
-            if not any(ent.unique_id == unique_id for ent in existing_recipe_entities.values()):
-                new_recipes.append(BrewfatherRecipeSensor(coordinator, recipe))
-        
-        if new_recipes:
-            async_add_entities(new_recipes)
-
-    # Реєструємо виклик при оновленні даних
-    entry.async_on_unload(
-        coordinator.async_add_listener(async_discover_recipes)
-    )
-    async_discover_recipes()
-
 class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
-    """Сутність для конкретного батчу (варки)."""
+    """An entity using CoordinatorEntity."""
 
     def __init__(
         self,
@@ -245,6 +221,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         sensorKind: SensorKinds,
         description: SensorEntityDescription,
     ):
+        """Pass coordinator to CoordinatorEntity."""
         super().__init__(coordinator)
 
         self._batch_id = batch_id
@@ -254,8 +231,8 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._attr_has_entity_name = True
         self._attr_name = self._entity_description.name
         
-        # Використовуємо batch_id (GUID) для залізобетонної унікальності в реєстрі HA
-        self._attr_unique_id = f"bf_b_{batch_id}_{self._entity_description.key}"
+        # unique_id залишаємо на базі batch_id (GUID від API), він і так унікальний
+        self._attr_unique_id = f"{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
@@ -264,24 +241,28 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         
         self._update_internal_state()
 
-        # Формування красивого entity_id
+        # --- МОДИФІКАЦІЯ ENTITY_ID ---
         if batch_id == "all_batches_global":
-            self.entity_id = "sensor.brewfather_all_batches_data"
+            self.entity_id = f"sensor.brewfather_all_batches_data"
         else:
             batch_data = self._get_my_batch_data()
             recipe_name = getattr(batch_data, "brew_name", str(batch_id)) if batch_data else str(batch_id)
+            # Додаємо номер батчу прямо в ID сутності
+            batch_name = getattr(batch_data, "name", "") if batch_data else ""
             batch_no = getattr(batch_data, "batch_no", "") if batch_data else ""
 
             safe_recipe_name = slugify(recipe_name)
+            safe_batch_name = slugify(batch_name)
             
-            # Результат: sensor.bf_batch_12_nelson_sauvin_status
-            if batch_no:
-                self.entity_id = f"sensor.bf_batch_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
+            # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
+            if batch_no and safe_batch_name:
+                self.entity_id = f"sensor.brewfather_batch_{safe_batch_name}_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
             else:
-                self.entity_id = f"sensor.bf_batch_{safe_recipe_name}_{self._entity_description.key}"
+                self.entity_id = f"sensor.brewfather_batch_{safe_recipe_name}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
+        """Group entities into a Device representing a specific batch."""
         if self._batch_id == "all_batches_global":
             return None
             
@@ -291,22 +272,31 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             
         return DeviceInfo(
             identifiers={(DOMAIN, self._batch_id)},
+            # Тепер у списку пристроїв буде: "Batch #12: Nelson Sauvin"
             name=f"Batch #{batch_no}: {batch_name}",
             manufacturer="Brewfather",
             model="Brew Batch",
         )
-
     def _get_my_batch_data(self) -> Any:
+        """Finds the specific batch data for this entity from the coordinator."""
         data = self.coordinator.data
-        if not data: return None
-        if getattr(data, "batch_id", None) == self._batch_id: return data
+        if not data:
+            return None
+            
+        if getattr(data, "batch_id", None) == self._batch_id:
+            return data
+            
         if hasattr(data, "other_batches") and data.other_batches:
             for b in data.other_batches:
-                if getattr(b, "batch_id", None) == self._batch_id: return b
+                if getattr(b, "batch_id", None) == self._batch_id:
+                    return b
         return None
 
     def _update_internal_state(self):
+        """Updates internal state variables from coordinator data."""
         batch_data = self._get_my_batch_data()
+        
+        # Для глобального сенсора all_batches передаємо весь coordinator.data
         if self._batch_id == "all_batches_global":
             batch_data = self.coordinator.data
 
@@ -322,14 +312,18 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
 
     @property
     def state(self) -> StateType:
+        """Return the state."""
         return self._state
 
     @property
     def available(self) -> bool:
+        """Return True if entity is available."""
         return self._attr_available
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        _LOGGER.debug("Updating state of the sensors for batch %s.", self._batch_id)
         self._update_internal_state()
         self.async_write_ha_state()
 
@@ -459,98 +453,6 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             
         return sensor_data
 
-class BrewfatherRecipeSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
-    """Сутність, що представляє рецепт у глобальній бібліотеці."""
-
-    def __init__(self, coordinator, recipe_data):
-        super().__init__(coordinator)
-        self._recipe = recipe_data
-        self._recipe_id = recipe_data.get("_id")
-        recipe_name = recipe_data.get("name", "Unknown Recipe")
-        
-        self._attr_has_entity_name = True
-        self._attr_name = recipe_name
-        self._attr_unique_id = f"bf_r_{self._recipe_id}"
-        self.entity_id = f"sensor.bf_recipe_{slugify(recipe_name)}"
-        
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, "brewfather_recipe_library")},
-            name="Brewfather Recipe Library",
-            manufacturer="Brewfather",
-            model="Recipe Storage",
-            entry_type=dr.DeviceEntryType.SERVICE,
-        )
-
-    @property
-    def state(self):
-        return "Stored"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        r = self._recipe
-        # Ми пакуємо ВСІ поля, які ти надав, в атрибути
-        attrs = {
-            "author": r.get("author"),
-            "type": r.get("type"),
-            "teaser": r.get("teaser"),
-            "img_url": r.get("imgUrl"),
-            # Style
-            "style": r.get("style"),
-            "style_conformity": r.get("styleConformity"),
-            # Volumes and Efficiency
-            "batch_size": r.get("batchSize"),
-            "boil_size": r.get("boilSize"),
-            "boil_time": r.get("boilTime"),
-            "efficiency": r.get("efficiency"),
-            "mash_efficiency": r.get("mashEfficiency"),
-            # Ingredients
-            "fermentables": r.get("fermentables", []),
-            "hops": r.get("hops", []),
-            "miscs": r.get("miscs", []),
-            "yeasts": r.get("yeasts", []),
-            "fermentables_total_amount": r.get("fermentablesTotalAmount"),
-            "hops_total_amount": r.get("hopsTotalAmount"),
-            # Gravity
-            "og": r.get("og"),
-            "fg": r.get("fg"),
-            "fg_esimated": r.get("fgEstimated"),
-            "attenuation": r.get("attenuation"),
-            "pre_boil_gravity": r.get("preBoilGravity"),
-            "post_boil_gravity": r.get("postBoilGravity"),
-            "first_wort_gravity": r.get("firstWortGravity"),
-            # Colors and Bitterness
-            "color": r.get("color"),
-            "ibu": r.get("ibu"),
-            "ibu_formula": r.get("ibuFormula"),
-            "bu_gu_ratio": r.get("buGuRatio"),
-            "rb_ratio": r.get("rbRatio"),
-            # ABV nd Carbonation
-            "abv": r.get("abv"),
-            "carbonation": r.get("carbonation"),
-            "carbonation_temp": r.get("carbonationTemp"),
-            "priming_sugar_equiv": r.get("primingSugarEquiv"),
-            # Profiles
-            "equipment": r.get("equipment"),
-            "mash": r.get("mash"),
-            "fermentation": r.get("fermentation"),
-            "water": r.get("water"),
-            # Calculated Data
-            "data": r.get("data"),
-            # Metadata
-            "notes": r.get("notes"),
-            "tags": r.get("tags"),
-            "nutrition": r.get("nutrition"),
-            "path": r.get("path"),
-            "diastatic_power": r.get("diastaticPower")
-        }
-        return attrs
-
-    @property
-    def icon(self) -> str:
-        return "mdi:book-open-variant"
-
 class SensorKinds(enum.Enum):
     fermenting_name = 1
     fermenting_current_temperature = 2
@@ -568,4 +470,3 @@ class SensorKinds(enum.Enum):
     measured_og = 15
     measured_fg = 16
     brew_date = 17
-    recipe_library_entry = 100
