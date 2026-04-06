@@ -251,7 +251,8 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             batch_name = getattr(batch_data, "name", "") if batch_data else ""
             batch_no = getattr(batch_data, "batch_no", "??") if batch_data else "??"
             recipe_name = getattr(batch_data, "recipe_name", "") if batch_data else ""
-
+            print("--------------------------------------")
+            print(recipe_name)
             safe_recipe_name = slugify(recipe_name)
             safe_batch_name = slugify(batch_name)            
             # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
@@ -424,6 +425,8 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             sensor_data.state = getattr(batch_data, "batch_name", None)
         
         elif sensor_type == SensorKinds.recipe_name:
+            print("-----------getattr---------------------------")
+            print(getattr(batch_data, "recipe_name", None))
             sensor_data.state = getattr(batch_data, "recipe_name", None)
 
         elif sensor_type == SensorKinds.brew_date:
