@@ -254,7 +254,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             safe_recipe_name = slugify(recipe_name)
             safe_batch_name = slugify(batch_name)            
             # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
-            self.entity_id = f"sensor.bf_batch_{safe_batch_name}_{batch_no}_{self._entity_description.key}"
+            self.entity_id = f"sensor.bf_batch_{batch_no}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -454,20 +454,20 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         return sensor_data
 
 class SensorKinds(enum.Enum):
-    fermenting_current_temperature = 1
-    fermenting_next_temperature = 2
-    fermenting_next_date = 3
-    fermenting_last_reading = 4
-    all_batch_info = 5
-    fermenting_start_date = 6
-    batch_notes = 7
-    events = 8
-    brewer = 9
-    status = 10
-    batch_no = 11
-    batch_name = 12
-    recipe_name = 13
-    measured_abv = 14
-    measured_og = 15
-    measured_fg = 16
-    brew_date = 17
+    fermenting_current_temperature = 2
+    fermenting_next_temperature = 3
+    fermenting_next_date = 4
+    fermenting_last_reading = 6
+    all_batch_info = 7
+    fermenting_start_date = 8
+    batch_notes = 9
+    events = 10
+    brewer = 11
+    status = 12
+    batch_no = 13
+    batch_name = 14
+    recipe_name = 15
+    measured_abv = 16
+    measured_og = 17
+    measured_fg = 18
+    brew_date = 19
