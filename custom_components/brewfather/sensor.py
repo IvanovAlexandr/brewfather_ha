@@ -133,6 +133,7 @@ async def async_setup_entry(
 
     # 2. Описуємо всі типи сенсорів, які потрібно створювати для КОЖНОГО батча
     sensor_definitions = [
+        (SensorKinds.fermenting_name, SensorEntityDescription(key="recipe_name", name="Recipe name", icon="mdi:glass-mug")),
         (SensorKinds.brewer, SensorEntityDescription(key="brewer", name="Brewer", icon="mdi:account")),
         (SensorKinds.fermenting_current_temperature, SensorEntityDescription(key="target_temperature", name="Target temperature", icon="mdi:thermometer", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT)),
         (SensorKinds.fermenting_next_temperature, SensorEntityDescription(key="upcoming_target_temperature", name="Upcoming target temperature", icon="mdi:thermometer-chevron-up", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE)),
@@ -457,20 +458,21 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         return sensor_data
 
 class SensorKinds(enum.Enum):
-    fermenting_current_temperature = 1
-    fermenting_next_temperature = 2
-    fermenting_next_date = 3
-    fermenting_last_reading = 4
-    all_batch_info = 5
-    fermenting_start_date = 6
-    batch_notes = 7
-    events = 8
-    brewer = 9
-    status = 10
-    batch_no = 11
-    batch_name = 12
-    recipe_name = 13
-    measured_abv = 14
-    measured_og = 15
-    measured_fg = 16
-    brew_date = 17
+    fermenting_name = 1
+    fermenting_current_temperature = 2
+    fermenting_next_temperature = 3
+    fermenting_next_date = 4
+    fermenting_last_reading = 6
+    all_batch_info = 7
+    fermenting_start_date = 8
+    batch_notes = 9
+    events = 10
+    brewer = 11
+    status = 12
+    batch_no = 13
+    batch_name = 14
+    recipe_name = 15
+    measured_abv = 16
+    measured_og = 17
+    measured_fg = 18
+    brew_date = 19
