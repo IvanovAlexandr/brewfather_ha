@@ -133,7 +133,7 @@ async def async_setup_entry(
 
     # 2. Описуємо всі типи сенсорів, які потрібно створювати для КОЖНОГО батча
     sensor_definitions = [
-        (SensorKinds.fermenting_name, SensorEntityDescription(key="recipe_name", name="Recipe name", icon="mdi:glass-mug")),
+        (SensorKinds.fermenting_name, SensorEntityDescription(key="fermenting_name", name="Recipe name", icon="mdi:glass-mug")),
         (SensorKinds.brewer, SensorEntityDescription(key="brewer", name="Brewer", icon="mdi:account")),
         (SensorKinds.fermenting_current_temperature, SensorEntityDescription(key="target_temperature", name="Target temperature", icon="mdi:thermometer", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE, state_class=SensorStateClass.MEASUREMENT)),
         (SensorKinds.fermenting_next_temperature, SensorEntityDescription(key="upcoming_target_temperature", name="Upcoming target temperature", icon="mdi:thermometer-chevron-up", native_unit_of_measurement=UnitOfTemperature.CELSIUS, device_class=SensorDeviceClass.TEMPERATURE)),
@@ -251,8 +251,6 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             batch_name = getattr(batch_data, "name", "") if batch_data else ""
             batch_no = getattr(batch_data, "batch_no", "??") if batch_data else "??"
             recipe_name = getattr(batch_data, "recipe_name", "") if batch_data else ""
-            print("--------------------------------------")
-            print(recipe_name)
             safe_recipe_name = slugify(recipe_name)
             safe_batch_name = slugify(batch_name)            
             # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
@@ -425,8 +423,6 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             sensor_data.state = getattr(batch_data, "batch_name", None)
         
         elif sensor_type == SensorKinds.recipe_name:
-            print("-----------getattr---------------------------")
-            print(getattr(batch_data, "recipe_name", None))
             sensor_data.state = getattr(batch_data, "recipe_name", None)
 
         elif sensor_type == SensorKinds.brew_date:
