@@ -52,7 +52,7 @@ class BrewfatherStatusSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator, context=None)
         self.entity_description = entity_description
         self._entry = entry
-        self._attr_unique_id = f"{SENSOR_PREFIX}_{entry.entry_id}_{entity_description.key}"
+        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{entry.entry_id}_{entity_description.key}"
         self._attr_name = f"{SENSOR_PREFIX} {entity_description.name}"
 
     @property
@@ -232,7 +232,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
         self._attr_name = self._entity_description.name
         
         # unique_id залишаємо на базі batch_id (GUID від API), він і так унікальний
-        self._attr_unique_id = f"{batch_id}_{self._entity_description.key}"
+        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{self._entity_description.key}"
 
         self._attr_icon = self._entity_description.icon
         self._attr_state_class = self._entity_description.state_class
