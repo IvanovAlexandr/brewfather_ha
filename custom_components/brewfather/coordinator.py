@@ -38,7 +38,8 @@ class BrewfatherCoordinatorData:
     batch_id: Optional[str]
     status: Optional[str]          # НОВЕ
     batch_no: Optional[int]        # НОВЕ
-    brew_name: Optional[str]
+    batch_name: Optional[str]
+    recipe_name: Optional[str]
     brewer: Optional[str]
     brew_date: Optional[int]       # НОВЕ
     measured_og: Optional[float]   # НОВЕ
@@ -61,7 +62,8 @@ class BrewfatherCoordinatorData:
         self.batch_id = None
         self.status = None
         self.batch_no = None
-        self.brew_name = None
+        self.batch_name = None
+        self.recipe_name = None
         self.brewer = None
         self.brew_date = None
         self.measured_abv = None
@@ -184,7 +186,8 @@ class BrewfatherCoordinator(DataUpdateCoordinator[BrewfatherCoordinatorData]):
         data.batch_id = currentBatch.batch.id
         data.status = currentBatch.batch.status
         data.batch_no = currentBatch.batch.batch_no
-        data.brew_name = currentBatch.batch.recipe.name if currentBatch.batch.recipe else "Unknown"
+        data.batch_name = currentBatch.batch.name
+        data.recipe_name = currentBatch.batch.recipe.name if currentBatch.batch.recipe else "Unknown"
         data.brewer = currentBatch.batch.brewer
         data.brew_date = currentBatch.batch.brew_date
         data.measured_og = currentBatch.batch.measured_og

@@ -246,16 +246,14 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             self.entity_id = f"sensor.brewfather_all_batches_data"
         else:
             batch_data = self._get_my_batch_data()
-            recipe_name = getattr(batch_data, "brew_name", str(batch_id)) if batch_data else str(batch_id)
-            # Додаємо номер батчу прямо в ID сутності
             batch_name = getattr(batch_data, "name", "") if batch_data else ""
-            batch_no = getattr(batch_data, "batch_no", "") if batch_data else ""
+            batch_no = getattr(batch_data, "batch_no", "??") if batch_data else "??"
+            recipe_name = getattr(batch_data, "recipe_name", "") if batch_data else ""
 
             safe_recipe_name = slugify(recipe_name)
-            safe_batch_name = slugify(batch_name)
-            
+            safe_batch_name = slugify(batch_name)            
             # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
-            self.entity_id = f"sensor.brewfather_batch_{safe_batch_name}_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
+            self.entity_id = f"sensor.bf_batch_{safe_batch_name}_{batch_no}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
@@ -264,13 +262,14 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             return None
             
         batch_data = self._get_my_batch_data()
-        batch_name = getattr(batch_data, "brew_name", "Unknown Brew") if batch_data else "Unknown Brew"
+        recipe_name = getattr(batch_data, "recipe_name", "") if batch_data else ""
         batch_no = getattr(batch_data, "batch_no", "??") if batch_data else "??"
+        batch_name = getattr(batch_data, "name", "") if batch_data else ""
             
         return DeviceInfo(
             identifiers={(DOMAIN, self._batch_id)},
             # Тепер у списку пристроїв буде: "Batch #12: Nelson Sauvin"
-            name=f"Batch #{batch_no}: {batch_name}",
+            name=f"Batch #{batch_no} {batch_name}: {recipe_name}",
             manufacturer="Brewfather",
             model="Brew Batch",
         )
