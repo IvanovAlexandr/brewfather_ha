@@ -144,6 +144,8 @@ async def async_setup_entry(
         (SensorKinds.events, SensorEntityDescription(key="events", name="Events", icon="mdi:calendar-clock")),
         (SensorKinds.status, SensorEntityDescription(key="status", name="Status", icon="mdi:list-status")),
         (SensorKinds.batch_no, SensorEntityDescription(key="batch_no", name="Batch Number", icon="mdi:pound")),
+        (SensorKinds.batch_name, SensorEntityDescription(key="batch_name", name="Batch Name", icon="mdi:pound")),
+        (SensorKinds.recipe_name, SensorEntityDescription(key="recipe_name", name="Recipe Name", icon="mdi:pound")),
         (SensorKinds.measured_abv, SensorEntityDescription(key="measured_abv", name="Measured ABV", icon="mdi:percent", native_unit_of_measurement="%")),
         (SensorKinds.measured_og, SensorEntityDescription(key="measured_og", name="Measured OG", icon="mdi:water-percent", state_class=SensorStateClass.MEASUREMENT)),
         (SensorKinds.measured_fg, SensorEntityDescription(key="measured_fg", name="Measured FG", icon="mdi:water-percent", state_class=SensorStateClass.MEASUREMENT)),
@@ -417,6 +419,12 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
 
         elif sensor_type == SensorKinds.batch_no:
             sensor_data.state = getattr(batch_data, "batch_no", None)
+        
+        elif sensor_type == SensorKinds.batch_name:
+            sensor_data.state = getattr(batch_data, "batch_name", None)
+        
+        elif sensor_type == SensorKinds.recipe_name:
+            sensor_data.state = getattr(batch_data, "recipe_name", None)
 
         elif sensor_type == SensorKinds.brew_date:
             brew_date_ts = getattr(batch_data, "brew_date", None)
@@ -462,7 +470,9 @@ class SensorKinds(enum.Enum):
     brewer = 11
     status = 12
     batch_no = 13
-    measured_abv = 14
-    measured_og = 15
-    measured_fg = 16
-    brew_date = 17
+    batch_name = 14
+    recipe_name = 15
+    measured_abv = 16
+    measured_og = 17
+    measured_fg = 18
+    brew_date = 19
