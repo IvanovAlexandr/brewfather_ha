@@ -52,7 +52,7 @@ class BrewfatherStatusSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator, context=None)
         self.entity_description = entity_description
         self._entry = entry
-        self._attr_unique_id = f"{SENSOR_PREFIX}_{batch_id}_{entry.entry_id}_{entity_description.key}"
+        self._attr_unique_id = f"{SENSOR_PREFIX}_{entry.entry_id}_{entity_description.key}"
         self._attr_name = f"{SENSOR_PREFIX} {entity_description.name}"
 
     @property
@@ -255,10 +255,7 @@ class BrewfatherSensor(CoordinatorEntity[BrewfatherCoordinator], SensorEntity):
             safe_batch_name = slugify(batch_name)
             
             # Тепер ID буде: sensor.brewfather_batch_12_nelson_sauvin_status
-            if batch_no and safe_batch_name:
-                self.entity_id = f"sensor.brewfather_batch_{safe_batch_name}_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
-            else:
-                self.entity_id = f"sensor.brewfather_batch_{safe_recipe_name}_{self._entity_description.key}"
+            self.entity_id = f"sensor.brewfather_batch_{safe_batch_name}_{batch_no}_{safe_recipe_name}_{self._entity_description.key}"
 
     @property
     def device_info(self) -> DeviceInfo | None:
